@@ -1,4 +1,14 @@
 // dllmain.cpp : Définit le point d'entrée de l'application DLL.
+/*
+build paths
+desktop
+D:\Jeux\UCE 1.0.1.18\scripts\UndercoverExposed.asi
+
+laptop
+
+C:\Program Files (x86)\EA Games\Need for Speed Undercover\scripts\UndercoverExposed.asi
+
+*/
 #include "pch.h"
 #include <cstdint>
 #include <iostream>
@@ -18,24 +28,62 @@ static uint32_t readInt(std::ifstream& input) {
     return a;
 }
 
+//useful shit
 auto getVltHash = (uint32_t(__cdecl*)(char* toHash)) 0x0;
+auto getBinHash = (uint32_t(__cdecl*)(char* toHash)) 0x0;
+auto MemoryAlloc = (DWORD(__cdecl*)(DWORD size, const char* name, DWORD baseAddress)) 0x0;
+auto getTexture = (char* (__cdecl*)(uint32_t textureHash, int param_2, int param_3)) 0x0;
+
+DWORD* MemBlock_Global;
+DWORD* MemBlock_FE;
+
+int* GameFlow;
+int* Renderer;
+DWORD* FEScreenManager;
+
+DWORD CurrentVisualStyle;
+
+const DWORD zero = 0x00000000;
 
 std::random_device rd;
 std::mt19937 gen(rd());
 
+struct Vector3 {
+    float x;
+    float y;
+    float z;
+};
+struct Vector4 {
+    float x;
+    float y;
+    float z;
+    float w;
+};
+
 namespace Settings{
+    static bool CrashFixes = true;
     static bool FixTruckTrailers = true;
     static bool verbose = true;
     static bool KitRideHeight = true;
     static int lastGoodGlobalB = 1242129289;
 
-    static int GeomAllocBlockSize = 0x50000;
+    static int IndexBufferSize = 0x50000;
+    static int CarsPoolSize = 0x4e20000;
 
     static bool useDayNightCycle = false;
     static bool DayNightCycleRandomStart = true;
     static vector<vector<uint32_t>> VisualStyleCycles;
     static int DayNightCycleDuration = 24 * 60;
     //static int DayNightCycleDuration = 10;
+    static bool SkipBootupChecks = true;
+
+    static bool HeadlightTweaksEnabled = true;
+    static bool AutomaticHeadlights = true;
+    static int AutomaticHeadlightsField = 0x60;
+    static float AutomaticHeadlightsThresold = 0.5;
+    static bool ProjectionCutoff = true;
+    static int ProjectionCutoffField = 0x60;
+    static float ProjectionCutoffThresold = 0.5;
 
     static void getConfigSetting(string setting, string line, int* ret) {
         if (line.find(setting + " ") == 0) {
@@ -47,6 +95,15 @@ namespace Settings{
             else {
                 sscanf_s(line.substr(value, std::string::npos).c_str(), "%d", ret);
             }
+            //std::cout << setting << " = " << *ret << "\n";
+        }
+    }
+
+    static void getConfigSetting(string setting, string line, float* ret) {
+        if (line.find(setting + " ") == 0) {
+            int value = line.find("=") + 1;
+            while (line.at(value) == ' ' || line.at(value) == '\t') value++;
+            sscanf_s(line.substr(value, std::string::npos).c_str(), "%f", ret);
             //std::cout << setting << " = " << *ret << "\n";
         }
     }
@@ -104,7 +161,7 @@ namespace Settings{
                         if (getVltHash != (uint32_t(__cdecl*)(char* toHash))0x0) {
                             cycle.push_back(getVltHash((char*)toHash.c_str()));
                         }
-                        else std::cout << "Can't access the Vlt hasher!";
+                        else std::cout << "Undercover Exposed: Can't access the Vlt hasher!";
 
                     }
                     while (i < line.size() && (line.at(i) == ' ' || line.at(i) == '\t' || line.at(i) == ',' || line.at(i) == ';')) i++; //skip a blank
@@ -141,15 +198,36 @@ namespace Settings{
         struct stat confEx;
         if (stat("UndercoverExposed.ini", &confEx) == -1) {
             std::ofstream configFile("UndercoverExposed.ini");
-            configFile << "FixTruckTrailers = 1\n";
-            configFile << "Verbose = 1\n";
-            configFile << "EnableKitRideHeight = 1\n";
-            configFile << "LastGoodGlobalB = 1242129289\n";
-            configFile << "GeomAllocBlockSize = 0x500000\n"; //vanilla 0x50000
-            configFile << "DayNightCycleEnabled = 1\n";
-            configFile << "DayNightCycleRandomStart = 1\n";
-            configFile << "DayNightCycleDuration = 1440\n";
-            configFile << "DayNightCycle = [[sunny6_0,sunny4_22.5,sunny2_45,lessnukedsunny_90,wet_135,wet2_150,wet3_180,wet_180,sunny7_180,sunset_180,sunset3_180,night_4_180,night_2_210,night_3_240,night_7_270,night_1_300,night_6_330,night_5_360]]\n";
+            configFile << R"([Fixes]
+Verbose = 1				//includes additional debugging information
+CrashFixes = 1				//fixes various crashes, some specific to Exposed
+IndexBufferSize = 0xA0000		//increases IndexBufferSize, vanilla = 0x50000
+CarsPoolSize = 0x8000000		//increases Cars pool size, vanilla = 0x4e20000
+FixTruckTrailers = 1			//fixes tractor-trailer linking broken by Binary 2.8.3
+LastGoodGlobalB = 1242129289
+
+[Features: Miscellaneous]
+KitRideHeightEnabled = 1		//enables per-kit ride height on some cars
+SkipBootupChecks = 1			//skips some unnecessary bootup checks
+
+[Features: Day and Night Cycle]
+DayNightCycleEnabled = 1		//enables the day and night cycle
+DayNightCycleRandomStart = 1		//starts the cycle at a random time instead of its beginning
+DayNightCycleDuration = 1440		//total cycle duration in seconds, default is 1440 (24 minutes)
+DayNightCycle = [ [sunny6_0,sunny4_22.5,sunny2_45,lessnukedsunny_90,wet_135,wet2_150,wet3_180,wet_180,sunny7_180,sunset_180,sunset3_180,night_4_180,night_2_210,night_3_240,night_7_270,night_1_300,night_6_330,night_5_360]]
+//array of weather sets, all weather sets must have the same amount of visual zones for better results
+//DayNightCycleDuration = 300
+//DayNightCycle = ((sunny6_0,sunny4_22.5),(sunny2_45,lessnukedsunny_90),(wet_135,wet2_150),(wet3_180,wet_180),(sunny7_180),(sunset_180,sunset3_180),(night_4_180,night_2_210),(night_3_240,night_7_270),(night_1_300,night_6_330),(night_5_360, night_1_300))
+
+[Features: Headlights]
+HeadlightTweaksEnabled = 1		//enables headlight projection and toggling emissive textures with headlights
+AutomaticHeadlights = 1			//toggles headlights on when it's dark and off when not
+AutomaticHeadlightsField = 0x60		//brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
+AutomaticHeadlightsThresold = 0.5	//brightness thresold value, each car will use a slightly different value near this
+ProjectionCutoff = 1			//controls whether headlights projection is turned off when it's too bright regardless of headlights state
+ProjectionCutoffField = 0x60		//brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
+ProjectionCutoffThresold = 0.5		//brightness thresold value
+)";
             configFile.flush();
             configFile.close();
         }
@@ -157,15 +235,31 @@ namespace Settings{
         std::string line;
 
         while (std::getline(configFile, line)) {
-            getConfigSetting("FixTruckTrailers", line, &Settings::FixTruckTrailers);
             getConfigSetting("Verbose", line, &Settings::verbose);
+            getConfigSetting("CrashFixes", line, &CrashFixes);
+            getConfigSetting("FixTruckTrailers", line, &Settings::FixTruckTrailers);
             getConfigSetting("LastGoodGlobalB", line, &Settings::lastGoodGlobalB);
-            getConfigSetting("GeomAllocBlockSize", line, &Settings::GeomAllocBlockSize);
+            getConfigSetting("GeomAllocBlockSize", line, &Settings::IndexBufferSize);
+            getConfigSetting("IndexBufferSize", line, &Settings::IndexBufferSize);
+            getConfigSetting("CarsPoolSize", line, &Settings::CarsPoolSize);
+
+            getConfigSetting("EnableKitRideHeight", line, &Settings::KitRideHeight);
+            getConfigSetting("KitRideHeightEnabled", line, &Settings::KitRideHeight);
+            getConfigSetting("SkipBootupChecks", line, &Settings::SkipBootupChecks);
+
             getConfigSetting("DayNightCycleEnabled", line, &Settings::useDayNightCycle);
             getConfigSetting("DayNightCycleDuration", line, &Settings::DayNightCycleDuration);
             getConfigSetting("DayNightCycleRandomStart", line, &Settings::DayNightCycleRandomStart);
             getConfigSettingVltHash2DArray("DayNightCycle", line, &Settings::VisualStyleCycles);
-            getConfigSetting("EnableKitRideHeight", line, &Settings::KitRideHeight);
+
+            getConfigSetting("HeadlightTweaksEnabled", line, &HeadlightTweaksEnabled);
+            getConfigSetting("AutomaticHeadlights", line, &AutomaticHeadlights);
+            getConfigSetting("AutomaticHeadlightsField", line, &AutomaticHeadlightsField);
+            getConfigSetting("AutomaticHeadlightsThresold", line, &AutomaticHeadlightsThresold);
+            getConfigSetting("ProjectionCutoff", line, &ProjectionCutoff);
+            getConfigSetting("ProjectionCutoffField", line, &ProjectionCutoffField);
+            getConfigSetting("ProjectionCutoffThresold", line, &ProjectionCutoffThresold);
+
         }
         configFile.close();
 
@@ -229,8 +323,8 @@ namespace GeomAlloc{
     static void* calculation;
     static void* forceSkipExit;
     void printMemoryLeakDetected(int requestedSize) {
-        std::cout << "Trying to load a model over the polycount limit (" << requestedSize / 6 << " > " << Settings::GeomAllocBlockSize / 6 << ").\nPreventing a memory leak; the affected model will not render.\n";
-        if (Settings::verbose) MessageBoxA(NULL, ("Trying to load a model over the polycount limit (" + std::to_string(requestedSize / 6) + " > " + std::to_string(Settings::GeomAllocBlockSize / 6) + ").\nPreventing a memory leak; the affected model will not render.").c_str(), "Undercover Exposed", MB_ICONERROR);
+        std::cout << "Trying to load a model over the polycount limit (" << requestedSize / 6 << " > " << Settings::IndexBufferSize / 6 << ").\nPreventing a memory leak; the affected model will not render.\n";
+        if (Settings::verbose) MessageBoxA(NULL, ("Trying to load a model over the polycount limit (" + std::to_string(requestedSize / 6) + " > " + std::to_string(Settings::IndexBufferSize / 6) + ").\nPreventing a memory leak; the affected model will not render.").c_str(), "Undercover Exposed", MB_ICONERROR);
     }
     void printInt(int i) {
         std::cout << "int=" << i << "\n";
@@ -396,7 +490,7 @@ namespace DayNight {
 }
 
 namespace Verbose {
-    static const char* fatalerr = "Fatal error";
+    static const char* fatalerr = "Memory Framework : Fatal error";
     void* __alloca_probe = (void*)0x0087b250;
     __declspec(naked) void DebugPrintReplacement() { __asm {
         MOV        EAX, 0x1000
@@ -608,13 +702,34 @@ namespace KitRideHeight {
     // 1.0 FE : i give up this version is ass
     __declspec(naked) void FERideHeightDetour_10() {
         __asm {
+            /*
+            VANILLA CODE BLOCk
 
-            MOV        ECX, dword ptr[EAX + 0x549c] // ecarValues
-            MOVSS      XMM0, dword ptr[ECX + 0x44]  // MinFERideHeight
-            MOVSS      XMM1, dword ptr[ECX + 0x4c]  // MaxFERideHeight
+            MOV        ECX,dword ptr [EAX + 0x549c] //ecar values
+            MOVSS      XMM0,dword ptr [ECX + 0x44] //MinFERideHeight
+            MOVSS      XMM1,dword ptr [ECX + 0x4c] //MaxFERideHeight
 
-            push edx;
+            MOV        ECX,dword ptr [EAX + 0x43c]
+            MOVSS      dword ptr [ESP + 0x18],XMM0
+            CVTPS2PD   XMM0,XMM0
+            CVTPS2PD   XMM1,XMM1
+            SUBSD      XMM1,XMM0
+            MOVSS      XMM0,dword ptr [ECX + 0xad8]
+            CVTPS2PD   XMM0,XMM0
+            PUSH       0x0
+            MULSD      XMM1,XMM0
+            CVTPD2PS   XMM0,XMM1            
+            
+            */
+            
+            MOV        ECX, dword ptr[EAX + 0x549c] //ecar values
+            MOVSS      XMM0, dword ptr[ECX + 0x44] //MinFERideHeight
+            MOVSS      XMM1, dword ptr[ECX + 0x4c] //MaxFERideHeight
+
             push eax;
+            push ebx;
+            push ecx;
+            push edx;
 
             mov ecx, dword ptr[eax + 0x12e0];   // ECX = kitnumber
             push ecx;
@@ -622,60 +737,1061 @@ namespace KitRideHeight {
             lea ecx, [eax + 0x5498];            // ecar fields from the other class
             call getVltValuePointer;            // getVltValuePointer(ecarFields, FXAngularDeviation, kitnumber)
 
-
             test eax, eax; // check that we got something
             jz defaultToNormal; //use vanilla calculation if nothing
 
-            // modified calculation
-//            movss xmm3, dword ptr[eax];
-            mov edx, eax;
+            movss xmm3, dword ptr[eax];
+
+            pop edx;
+            pop ecx;
+            pop ebx;
             pop eax;
 
-            MOV        ECX, dword ptr[EAX + 0x43c];
 
-            //SUBSS      XMM1, XMM0;
-            //movss xmm0, xmm1;
-            //MULSS      XMM0, dword ptr[ECX + 0xad8];
+            MOV        ECX, dword ptr[EAX + 0x43c]
+            MOVSS      dword ptr[ESP + 0x18], XMM0
+            CVTPS2PD   XMM0, XMM0
+            CVTPS2PD   XMM1, XMM1
+            SUBSD      XMM1, XMM0
+            MOVSS      XMM0, dword ptr[ECX + 0xad8]
+            CVTPS2PD   XMM0, XMM0
+            PUSH       0x0
+            MULSD      XMM1, XMM0
+            CVTPD2PS   XMM0, XMM1
+            addss xmm0, xmm3; // add offset
 
-            movss dword ptr[esp + 0x18], xmm0;
-            cvtps2pd xmm0, xmm0;
-            cvtps2pd xmm1, xmm1;
-            subsd xmm1, xmm0;
-            movss xmm0, dword ptr[ecx + 0xad8];
-            cvtps2pd xmm0, xmm0;
-            push 0x0;
-            mulsd xmm1, xmm0;
-            cvtpd2ps xmm0, xmm1;
-
-            addss xmm0, dword ptr[edx]; // add offset
-            //PUSH       0x0;
-            pop edx;
             jmp FERideHeightDetourReturn;
 
-
         defaultToNormal:
+
+            pop edx;
+            pop ecx;
+            pop ebx;
             pop eax;
-            MOV        ECX, dword ptr[EAX + 0x43c];
 
-            //SUBSS      XMM1, XMM0;
-            //movss xmm0, xmm1;
-            //MULSS      XMM0, dword ptr[ECX + 0xad8];
 
-            movss dword ptr[esp + 0x18], xmm0;
-            cvtps2pd xmm0, xmm0;
-            cvtps2pd xmm1, xmm1;
-            subsd xmm1, xmm0;
-            movss xmm0, dword ptr[ecx + 0xad8];
-            cvtps2pd xmm0, xmm0;
-            push 0x0;
-            mulsd xmm1, xmm0;
-            cvtpd2ps xmm0, xmm1;
+            MOV        ECX, dword ptr[EAX + 0x43c]
+            MOVSS      dword ptr[ESP + 0x18], XMM0
+            CVTPS2PD   XMM0, XMM0
+            CVTPS2PD   XMM1, XMM1
+            SUBSD      XMM1, XMM0
+            MOVSS      XMM0, dword ptr[ECX + 0xad8]
+            CVTPS2PD   XMM0, XMM0
+            PUSH       0x0
+            MULSD      XMM1, XMM0
+            CVTPD2PS   XMM0, XMM1
 
-            //PUSH       0x0;
             jmp FERideHeightDetourReturn;
         }
     }
 }
+
+namespace Headlights {
+#define HEADLIGHT_LEFT 0xA7E6EA53
+#define HEADLIGHT_RIGHT 0xA532FC46
+
+    char* HEADLIGHTS_storage = 0;
+    void getHeadlightsTexture() {
+        if (HEADLIGHTS_storage != 0) return;
+        auto hash = getBinHash((char*)"HEADLIGHTS");
+        HEADLIGHTS_storage = getTexture(hash, 1, 0);
+        if (HEADLIGHTS_storage != 0) {
+            HEADLIGHTS_storage[0x38] = 0;
+            HEADLIGHTS_storage[0x35] = 3;
+        }
+    }
+
+    DWORD CRIoff_MPointsArrayPtr = 0x4C0;
+
+    bool hasXenonHeadlights(DWORD CarRenderInfo) {
+        if (*(DWORD*)(CarRenderInfo + 0x4) == 0xAAAAAAAA) {
+            //cout << "CarRenderInfo@" << (DWORD*)CarRenderInfo << "\n";
+            //cout << "MpointsArrayPtr " << (DWORD*)*(DWORD*)(CarRenderInfo + 0x4C0) << "\n";
+            DWORD MPointsArrayPtr = *(DWORD*)(CarRenderInfo + CRIoff_MPointsArrayPtr);
+            DWORD CurMPoint = *(DWORD*)MPointsArrayPtr;
+            while (*(DWORD*)CurMPoint != MPointsArrayPtr) {
+                DWORD MPData = *(DWORD*)(CurMPoint + 0x8);
+                DWORD hash = *(DWORD*)(MPData + 0x8);
+                //cout << "MPoint @" << CurMPoint << "; hash " << (DWORD*)hash << "\n";
+                if (hash == HEADLIGHT_LEFT || hash == HEADLIGHT_RIGHT) {
+                    *(DWORD*)(CarRenderInfo + 0x4) = 1;
+                    //cout << "is headlight\n";
+                    return true;
+                }
+                CurMPoint = *(DWORD*)CurMPoint;
+            }
+            *(DWORD*)(CarRenderInfo + 0x4) = 0;
+            //cout << "no xenon headlights\n";
+        }
+
+        return *(DWORD*)(CarRenderInfo + 0x4) & 1;
+    }
+
+    //makeHeadlights
+    auto D3DXVec3Transform = (void* (__cdecl*)(float* vec1, float* mat, float* vec2)) 0x0071b820; //__cdecl indeed
+    auto FUN_reset_00744290 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, int param_2)) 0x00744290;
+    auto FUN_UV_00744220 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, char* texturePtr)) 0x00744220;
+    auto draw_square = (void* (__fastcall*)(DWORD this_, DWORD unaff_edx, float* meshBuffer, float* matrix))0x00755d80;
+    auto FUN_00777f80 = (void* (__fastcall*)(DWORD this_))0x00777f80;
+    auto terrain_FUN_00864ef0 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, Vector4 * vec, char noRayCast)) 0x00864ef0;
+    auto normalizeVector_005d9950 = (void* (__cdecl*)(Vector4 * param_1, Vector4 * param_2)) 0x005d9950;
+    auto terrain_FUN_0085e900 = (float(__fastcall*)(DWORD this_, DWORD unaff_edx, Vector4 * vec)) 0x0085e900;
+
+    //lightsUpdateReplacement
+    auto FUN_00521090 = (void* (__fastcall*)(void* this_, DWORD unaff, int*, DWORD))0x00521090;
+    auto FUN_00521060 = (void* (__fastcall*)(void* this_, DWORD unaff, DWORD))0x00521060;
+    auto getXNAME_string_00817940 = (char* (__cdecl*)(DWORD param))0x00817940;
+
+    //asm injector
+    float* DAT_00b647ec = (float*)0x00b647ec;
+    auto drawCarShadow_00825430 = (void*)0x00825430;
+    void* FUN_00520d70 = (void*)0x00520d70;
+
+    void* FUN_00538df0 = (void*)0x00538df0; //1.0 shit
+
+
+    DWORD CRIoff_electricsState = 0x5308;
+    DWORD CRIoff_lightsDamage = 0x530c;
+    DWORD CRIoff_lightsGlassDamage = 0x5310;
+    DWORD CRIoff_headlightTextures = 0x52c8;
+    DWORD CRIoff_headlightGlassTextures = 0x52d4;
+    DWORD CRIoff_brakelightTextures = 0x52e0;
+    DWORD CRIoff_brakelightGlassTextures = 0x52ec;
+    DWORD CRIoff_this_00 = 0x8d4;
+    DWORD CRIoff_renderSettings = 0x54c8;
+    DWORD CRIoff_terrainAdj = 0x4b8;
+
+    DWORD Class43cOff_VehType = 0xe44;
+
+    void makePlaneMeshBuffer(float* mb) {
+        mb[0] = 0.0f;//pos0 x,y,z,w
+        mb[1] = 0.0f;
+        mb[2] = 0.0f;
+        mb[3] = 0.0f;//not initialized in the game
+        mb[4] = 64.0f;//pos1
+        mb[5] = 0.0f;
+        mb[6] = 0.0f;
+        mb[7] = 0.0f;//not initialized
+        mb[8] = 64.0f;//pos2
+        mb[9] = 64.0f;
+        mb[10] = 0.0f;
+        mb[0xb] = 0.0f;//not initialized
+        mb[0xc] = 0.0f;//pos3
+        mb[0xd] = 64.0f;
+        mb[0xe] = 0.0f;
+        mb[0xf] = 0.0f;//not initialized
+        mb[0x10] = 0.0f;//tex0 u,v
+        mb[0x11] = 0.0f;
+        mb[0x12] = 1.0f;//tex1
+        mb[0x13] = 0.0f;
+        mb[0x14] = 1.0f;//tex2
+        mb[0x15] = 1.0f;
+        mb[0x16] = 0.0f;//tex3
+        mb[0x17] = 1.0f;
+        mb[0x18] = 1.0f;//?
+        ((uint32_t*)mb)[0x20] = 0x80808080;//color0
+        ((uint32_t*)mb)[0x21] = 0x80808080;//color1
+        ((uint32_t*)mb)[0x22] = 0x80808080;//color2
+        ((uint32_t*)mb)[0x23] = 0x80808080;//color3
+        ((uint32_t*)mb)[0x24] = 0;//?
+    }
+
+    static const int headlightsRacer_grid_length = 10;
+    static const int headlightsRacer_grid_width = 5;
+    static const float headlightsRacer_length = 25.0;
+    static const float headlightsRacer_widthMinFactor = 0.8;
+    static const float headlightsRacer_widthIncreaseFactor = 0.5;
+
+    static const int taillightsRacer_grid_length = 2;
+    static const int taillightsRacer_grid_width = 3;
+    static const float taillightsRacer_length = 3.0;
+    static const float taillightsRacer_widthMinFactor = 1.7;
+    static const float taillightsRacer_widthIncreaseFactor = 0.0;
+
+    static const int headlightsTraffic_grid_length = 5;
+    static const int headlightsTraffic_grid_width = 5;
+    static const float headlightsTraffic_length = 15.0;
+    static const float headlightsTraffic_widthMinFactor = 0.8;
+    static const float headlightsTraffic_widthIncreaseFactor = 0.5;
+
+    static const float lights_snapToGroundThresold = -0.1; //-0.05; -0.5; -1
+    static const float lights_snapToGroundBaseThresold = -1.5;
+
+    void makeHeadlightsRacer(int CarRenderInfo, float* carPositionMatrix, float* matrix_6) {
+        int color = hasXenonHeadlights(CarRenderInfo) ? 0x958680 : 0x809090; //BGR
+        int colorB = 0x2020A0;
+        float headlightL = 0;
+        float headlightR = 0;
+        float taillightL = 0;
+        float taillightR = 0;
+        float brakelightL = 0;
+        float brakelightR = 0;
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000001 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000001)) headlightL = 1.0; //color = 0x809090; //headlight left
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000002 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000002)) headlightR = 1.0; //color = 0x809090; //headlight right
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000001 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000008)) taillightL = 1.0; //
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000002 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000010)) taillightR = 1.0; //
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000008 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000008)) brakelightL = 1.0; //brake
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000010 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000010)) brakelightR = 1.0; //brake
+        //if (*((int*)(CarRenderInfo + 0x5308)) & 0x00000040) color = 0xf0f0f0; //reverse
+
+        //if (headlightL == 0 && headlightR == 0 && brakelightL == 0 && brakelightR == 0) return;
+        
+        //float* matrix_6 = (float*)*(int*)(CarRenderInfo + 0x4f1c);
+        char meshbuffer[0x94]; // Temporary buffer for makePlaneMeshBuffer
+
+        Vector4 bumperTip = { 0, 0, 0, 0 }; //{ *(float*)(CarRenderInfo + 0x380), 0, 0, 0 };
+        D3DXVec3Transform((float*)&bumperTip, carPositionMatrix, (float*)&bumperTip);
+        Vector4 bumperTip_bis = { -bumperTip.y, bumperTip.z, bumperTip.x, 0 };
+        terrain_FUN_00864ef0((CarRenderInfo + 0x3f0), 0, 0, &bumperTip_bis, 1); // had *(int*)(CarRenderInfo + 0x4b8) instead of 0, it was causing the rays to tweak somehow
+        float terrainHeight = terrain_FUN_0085e900((CarRenderInfo + 0x3f0), 0, &bumperTip_bis); //-y, z, x !!!
+
+        float baseHeight = (terrainHeight - bumperTip.z > lights_snapToGroundBaseThresold) ? terrainHeight - bumperTip.z + 0.05 : 0.05;
+        //float baseHeight = *(float*)(CarRenderInfo + 0x378);
+
+
+        if (headlightR != 0 || headlightL != 0) {
+            float position[headlightsRacer_grid_length][headlightsRacer_grid_width * 4];
+            float texcoord[headlightsRacer_grid_length][headlightsRacer_grid_width * 2];
+
+            float x = 0;
+            float y = -*(float*)(CarRenderInfo + 0x384) * headlightsRacer_widthMinFactor; //boundsMin * factor
+            float u = 0;
+            // compute vertex positions
+            for (int j = 0; j < headlightsRacer_grid_width; j++) {
+                float v = 1;
+
+                x = *(float*)(CarRenderInfo + 0x380); //bounds max X
+
+                for (int i = 0; i < headlightsRacer_grid_length; i++) {
+                    u = 1.0 - j / (headlightsRacer_grid_width - 1.0); //causes wack ass shit tho
+                    position[i][j * 4 + 0] = x;
+                    position[i][j * 4 + 1] = y + headlightsRacer_widthIncreaseFactor * x * y; //*(1+ 0.2*x*i)
+                    position[i][j * 4 + 2] = baseHeight; //i*i
+                    position[i][j * 4 + 3] = 0;
+                    texcoord[i][j * 2 + 0] = u;
+                    texcoord[i][j * 2 + 1] = v;
+
+                    D3DXVec3Transform(&position[i][j * 4], carPositionMatrix, &position[i][j * 4]);
+
+                    x += headlightsRacer_length / (headlightsRacer_grid_length - 1);
+                    v -= 1.0 / (headlightsRacer_grid_length - 1);
+                }
+                y += *(float*)(CarRenderInfo + 0x384) * headlightsRacer_widthMinFactor * 2 / (headlightsRacer_grid_width - 1);
+            }
+
+            // project to terrain
+            if (*(int*)(CarRenderInfo + CRIoff_terrainAdj) != 0) {
+                for (int i = 0; i < headlightsRacer_grid_length; i++) for (int j = 0; j < headlightsRacer_grid_width; j++) {
+                    //vector_4d0 = { -vbuf[i].y, vbuf[i].z, vbuf[i].x };
+                    Vector4 vector_4d0 = { -position[i][j * 4 + 1], position[i][j * 4 + 2], position[i][j * 4 + 0] };
+
+                    terrain_FUN_00864ef0((int)(CarRenderInfo + 0x3f0), 0, 0, &vector_4d0, 1); // had *(int*)(CarRenderInfo + 0x4b8) instead of 0, it was causing the rays to tweak somehow
+                    float height = terrain_FUN_0085e900((int)(CarRenderInfo + 0x3f0), 0, &vector_4d0);
+
+                    if (height - position[i][j * 4 + 2] > lights_snapToGroundThresold) position[i][j * 4 + 2] = height + 0.05; //0.5* i / grid_length
+                }
+            }
+
+
+            // send to renderer
+            makePlaneMeshBuffer((float*)meshbuffer);
+            //std::cout << "mesh buffer initialized on stack " << meshbuffer << "\n";
+            //printMeshBuffer((float*)meshbuffer);
+
+            FUN_reset_00744290(*(DWORD*)(*Renderer + 0x40), 0, 4, 0);
+            *(int*)(*(int*)(*Renderer + 0x40) + 0xf4) = -1;
+            FUN_UV_00744220(*(DWORD*)(*Renderer + 0x40), 0, HEADLIGHTS_storage);
+
+            for (int i = 0; i < headlightsRacer_grid_length - 1; i++) {
+                for (int j = 0; j < headlightsRacer_grid_width - 1; j++) {
+                    //position
+                    for (int k = 0; k < 8; k++) {
+                        ((float*)meshbuffer)[k] = position[i][j * 4 + k];
+                    }
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 8] = position[i + 1][j * 4 + k + 4];
+                    }
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 12] = position[i + 1][j * 4 + k];
+                    }
+
+                    //UV
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 16] = texcoord[i][j * 2 + k];
+                    }
+                    for (int k = 0; k < 2; k++) {
+                        ((float*)meshbuffer)[k + 20] = texcoord[i + 1][j * 2 + k + 2];
+                    }
+                    for (int k = 0; k < 2; k++) {
+                        ((float*)meshbuffer)[k + 22] = texcoord[i + 1][j * 2 + k];
+                    }
+
+                    ((float*)meshbuffer)[24] = 1.0;
+
+                    //attempt at having depth dependent intensity
+                    float mixDmg = (headlightL * (j) / headlightsRacer_grid_width + headlightR * (1.0 - 1.0 * (j) / headlightsRacer_grid_width));
+                    float mixDmgp1 = (headlightL * (j + 1) / headlightsRacer_grid_width + headlightR * (1.0 - 1.0 * (j + 1) / headlightsRacer_grid_width));
+                    float falloff = (1.0 - (1.0 * (i + 1) / headlightsRacer_grid_length));
+                    float falloffp1 = (1.0 - (1.0 * (i + 2) / headlightsRacer_grid_length));
+
+                    ((int*)meshbuffer)[32] = (char)((int)(150.0 * mixDmg * mixDmg * falloff * falloff)) << 0x18 | color; //ABGR
+                    ((int*)meshbuffer)[33] = (char)((int)(150.0 * mixDmgp1 * mixDmgp1 * falloff * falloff)) << 0x18 | color;
+                    ((int*)meshbuffer)[34] = (char)((int)(150.0 * mixDmgp1 * mixDmgp1 * falloffp1 * falloffp1)) << 0x18 | color;
+                    ((int*)meshbuffer)[35] = (char)((int)(150.0 * mixDmg * mixDmg * falloffp1 * falloffp1)) << 0x18 | color;
+
+                    draw_square(*(DWORD*)(*Renderer + 0x40), 0, (float*)meshbuffer, matrix_6);
+                }
+            }
+
+            FUN_00777f80(*(DWORD*)(*Renderer + 0x40));
+        }
+
+        if (taillightL != 0 || taillightR != 0 || brakelightR != 0 || brakelightL != 0) {
+            float position[taillightsRacer_grid_length][taillightsRacer_grid_width * 4];
+            float texcoord[taillightsRacer_grid_length][taillightsRacer_grid_width * 2];
+
+            float x = 0;
+            float y = -*(float*)(CarRenderInfo + 0x384) * taillightsRacer_widthMinFactor; //boundsMin * factor
+            float u = 0;
+            // compute vertex positions
+            for (int j = 0; j < taillightsRacer_grid_width; j++) {
+                float v = 1;
+
+                x = *(float*)(CarRenderInfo + 0x370); //bounds min X
+
+                for (int i = 0; i < taillightsRacer_grid_length; i++) {
+                    u = 1.0 - j / (taillightsRacer_grid_width - 1.0); //causes wack ass shit tho
+                    position[i][j * 4 + 0] = x;
+                    position[i][j * 4 + 1] = y + taillightsRacer_widthIncreaseFactor * x * y; //*(1+ 0.2*x*i)
+                    position[i][j * 4 + 2] = baseHeight; //i*i
+                    position[i][j * 4 + 3] = 0;
+                    texcoord[i][j * 2 + 0] = u;
+                    texcoord[i][j * 2 + 1] = v;
+
+                    D3DXVec3Transform(&position[i][j * 4], carPositionMatrix, &position[i][j * 4]);
+
+                    x -= taillightsRacer_length / (taillightsRacer_grid_length - 1);
+                    v -= 1.0 / (taillightsRacer_grid_length - 1);
+                }
+                y += *(float*)(CarRenderInfo + 0x384) * taillightsRacer_widthMinFactor * 2 / (taillightsRacer_grid_width - 1);
+            }
+
+            // project to terrain
+            if (*(int*)(CarRenderInfo + CRIoff_terrainAdj) != 0) {
+                for (int i = 0; i < taillightsRacer_grid_length; i++) for (int j = 0; j < taillightsRacer_grid_width; j++) {
+                    //vector_4d0 = { -vbuf[i].y, vbuf[i].z, vbuf[i].x };
+                    Vector4 vector_4d0 = { -position[i][j * 4 + 1], position[i][j * 4 + 2], position[i][j * 4 + 0] };
+
+                    terrain_FUN_00864ef0((int)(CarRenderInfo + 0x3f0), 0, 0, &vector_4d0, 1); // had *(int*)(CarRenderInfo + 0x4b8) instead of 0, it was causing the rays to tweak somehow
+                    float height = terrain_FUN_0085e900((int)(CarRenderInfo + 0x3f0), 0, &vector_4d0);
+
+                    if (height - position[i][j * 4 + 2] > lights_snapToGroundThresold) position[i][j * 4 + 2] = height + 0.05; //0.5* i / grid_length
+                }
+            }
+
+
+            // send to renderer
+            makePlaneMeshBuffer((float*)meshbuffer);
+            //std::cout << "mesh buffer initialized on stack " << meshbuffer << "\n";
+            //printMeshBuffer((float*)meshbuffer);
+
+            FUN_reset_00744290(*(DWORD*)(*Renderer + 0x40), 0, 4, 0);
+            *(int*)(*(int*)(*Renderer + 0x40) + 0xf4) = -1;
+            FUN_UV_00744220(*(DWORD*)(*Renderer + 0x40), 0, HEADLIGHTS_storage);
+
+            for (int i = 0; i < taillightsRacer_grid_length - 1; i++) {
+                for (int j = 0; j < taillightsRacer_grid_width - 1; j++) {
+                    //position
+                    for (int k = 0; k < 8; k++) {
+                        ((float*)meshbuffer)[k] = position[i][j * 4 + k];
+                    }
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 8] = position[i + 1][j * 4 + k + 4];
+                    }
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 12] = position[i + 1][j * 4 + k];
+                    }
+
+                    //UV
+                    for (int k = 0; k < 4; k++) {
+                        ((float*)meshbuffer)[k + 16] = texcoord[i][j * 2 + k];
+                    }
+                    for (int k = 0; k < 2; k++) {
+                        ((float*)meshbuffer)[k + 20] = texcoord[i + 1][j * 2 + k + 2];
+                    }
+                    for (int k = 0; k < 2; k++) {
+                        ((float*)meshbuffer)[k + 22] = texcoord[i + 1][j * 2 + k];
+                    }
+
+                    ((float*)meshbuffer)[24] = 1.0;
+
+                    //attempt at having depth dependent intensity
+                    float mixDmg = ((brakelightL + taillightL) * (j + 1) / taillightsRacer_grid_width + (brakelightR + taillightR) * (1 - 1.0 * (j + 1) / taillightsRacer_grid_width));
+                    float mixDmgp1 = ((brakelightL + taillightL) * (j + 2) / taillightsRacer_grid_width + (brakelightR + taillightR) * (1 - 1.0 * (j + 2) / taillightsRacer_grid_width));
+                    float falloff = (1.0 - (1.0 * (i + 1) / taillightsRacer_grid_length));
+                    float falloffp1 = (1.0 - (1.0 * (i + 2) / taillightsRacer_grid_length));
+
+                    ((int*)meshbuffer)[32] = (char)((int)(40.0 * mixDmg * mixDmg * falloff * falloff)) << 0x18 | colorB; //ABGR
+                    ((int*)meshbuffer)[33] = (char)((int)(40.0 * mixDmgp1 * mixDmgp1 * falloff * falloff)) << 0x18 | colorB;
+                    ((int*)meshbuffer)[34] = (char)((int)(40.0 * mixDmgp1 * mixDmgp1 * falloffp1 * falloffp1)) << 0x18 | colorB;
+                    ((int*)meshbuffer)[35] = (char)((int)(40.0 * mixDmg * mixDmg * falloffp1 * falloffp1)) << 0x18 | colorB;
+
+                    draw_square(*(DWORD*)(*Renderer + 0x40), 0, (float*)meshbuffer, matrix_6);
+                }
+            }
+
+            FUN_00777f80(*(DWORD*)(*Renderer + 0x40));
+        }
+    }
+
+    void makeHeadlightsTraffic(int CarRenderInfo, float* carPositionMatrix, float* matrix_6) {
+        int color = 0x809090; //BGR
+        float alphaL = 0;
+        float alphaR = 0;
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000001 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000001)) alphaL = 1.0; //color = 0x809090; //headlight left
+        if (*((int*)(CarRenderInfo + CRIoff_electricsState)) & 0x00000002 && !(*((int*)(CarRenderInfo + CRIoff_lightsDamage)) & 0x00000002)) alphaR = 1.0; //color = 0x809090; //headlight right
+        //if (*((int*)(CarRenderInfo + 0x5308)) & 0x00000008) color = 0x202090; //brake
+        //if (*((int*)(CarRenderInfo + 0x5308)) & 0x00000040) color = 0xf0f0f0; //reverse
+
+        if (alphaR == 0 && alphaL == 0) return;
+
+        //float* matrix_6 = (float*)*(int*)(CarRenderInfo + 0x4f1c);
+
+        float position[headlightsTraffic_grid_length][headlightsTraffic_grid_width * 4];
+        float texcoord[headlightsTraffic_grid_length][headlightsTraffic_grid_width * 2];
+        char meshbuffer[0x94]; // Temporary buffer for makePlaneMeshBuffer
+
+        Vector4 bumperTip = { 0, 0, 0, 0 }; //{ *(float*)(CarRenderInfo + 0x380), 0, 0, 0 };
+        D3DXVec3Transform((float*)&bumperTip, carPositionMatrix, (float*)&bumperTip);
+        Vector4 bumperTip_bis = { -bumperTip.y, bumperTip.z, bumperTip.x, 0 };
+        terrain_FUN_00864ef0(CarRenderInfo + 0x3f0, 0, 0, &bumperTip_bis, 1); // had *(int*)(CarRenderInfo + 0x4b8) instead of 0, it was causing the rays to tweak somehow
+        float terrainHeight = terrain_FUN_0085e900(CarRenderInfo + 0x3f0, 0, &bumperTip_bis); //-y, z, x !!!
+
+        float baseHeight = (terrainHeight - bumperTip.z > lights_snapToGroundBaseThresold) ? terrainHeight - bumperTip.z + 0.05 : 0.05;
+        //float baseHeight = *(float*)(CarRenderInfo + 0x378);
+
+        float x = 0;
+        float y = -*(float*)(CarRenderInfo + 0x384) * headlightsTraffic_widthMinFactor; //boundsMin * factor
+        float u = 0;
+
+        // compute vertex positions
+        for (int j = 0; j < headlightsTraffic_grid_width; j++) {
+            float v = 1;
+
+            x = *(float*)(CarRenderInfo + 0x380); //bounds max X
+
+            for (int i = 0; i < headlightsTraffic_grid_length; i++) {
+                u = 1.0 - j / (headlightsTraffic_grid_width - 1.0); //causes wack ass shit tho
+                position[i][j * 4 + 0] = x;
+                position[i][j * 4 + 1] = y + headlightsTraffic_widthIncreaseFactor * x * y; //*(1+ 0.2*x*i)
+                position[i][j * 4 + 2] = baseHeight; //i*i
+                position[i][j * 4 + 3] = 0;
+                texcoord[i][j * 2 + 0] = u;
+                texcoord[i][j * 2 + 1] = v;
+
+                D3DXVec3Transform(&position[i][j * 4], carPositionMatrix, &position[i][j * 4]);
+
+                x += headlightsTraffic_length / (headlightsTraffic_grid_length - 1);
+                v -= 1.0 / (headlightsTraffic_grid_length - 1);
+            }
+            y += *(float*)(CarRenderInfo + 0x384) * headlightsTraffic_widthMinFactor * 2 / (headlightsTraffic_grid_width - 1);
+        }
+
+        // project to terrain
+        if (*(int*)(CarRenderInfo + CRIoff_terrainAdj) != 0) {
+            for (int i = 0; i < headlightsTraffic_grid_length; i++) for (int j = 0; j < headlightsTraffic_grid_width; j++) {
+                //vector_4d0 = { -vbuf[i].y, vbuf[i].z, vbuf[i].x };
+                Vector4 vector_4d0 = { -position[i][j * 4 + 1], position[i][j * 4 + 2], position[i][j * 4 + 0] };
+
+                terrain_FUN_00864ef0(CarRenderInfo + 0x3f0, 0, 0, &vector_4d0, 1); // had *(int*)(CarRenderInfo + 0x4b8) instead of 0, it was causing the rays to tweak somehow
+                float height = terrain_FUN_0085e900(CarRenderInfo + 0x3f0, 0, &vector_4d0);
+
+                if (height - position[i][j * 4 + 2] > lights_snapToGroundThresold) position[i][j * 4 + 2] = height + 0.05; //0.5* i / grid_length
+            }
+        }
+
+        // send to renderer
+        makePlaneMeshBuffer((float*)meshbuffer);
+        //std::cout << "mesh buffer initialized on stack " << meshbuffer << "\n";
+        //printMeshBuffer((float*)meshbuffer);
+
+        FUN_reset_00744290(*(DWORD*)(*Renderer + 0x40), 0, 4, 0);
+        *(int*)(*(int*)(*Renderer + 0x40) + 0xf4) = -1;
+        FUN_UV_00744220(*(DWORD*)(*Renderer + 0x40), 0, HEADLIGHTS_storage);
+
+        for (int i = 0; i < headlightsTraffic_grid_length - 1; i++) {
+            for (int j = 0; j < headlightsTraffic_grid_width - 1; j++) {
+                //position
+                for (int k = 0; k < 8; k++) {
+                    ((float*)meshbuffer)[k] = position[i][j * 4 + k];
+                }
+                for (int k = 0; k < 4; k++) {
+                    ((float*)meshbuffer)[k + 8] = position[i + 1][j * 4 + k + 4];
+                }
+                for (int k = 0; k < 4; k++) {
+                    ((float*)meshbuffer)[k + 12] = position[i + 1][j * 4 + k];
+                }
+
+                //UV
+                for (int k = 0; k < 4; k++) {
+                    ((float*)meshbuffer)[k + 16] = texcoord[i][j * 2 + k];
+                }
+                for (int k = 0; k < 2; k++) {
+                    ((float*)meshbuffer)[k + 20] = texcoord[i + 1][j * 2 + k + 2];
+                }
+                for (int k = 0; k < 2; k++) {
+                    ((float*)meshbuffer)[k + 22] = texcoord[i + 1][j * 2 + k];
+                }
+
+                ((float*)meshbuffer)[24] = 1.0;
+
+                //attempt at having depth dependent intensity
+
+                float mixDmg = (alphaL * (j) / headlightsTraffic_grid_width + alphaR * (1.0 - 1.0 * (j) / headlightsTraffic_grid_width));
+                float mixDmgp1 = (alphaL * (j + 1) / headlightsTraffic_grid_width + alphaR * (1.0 - 1.0 * (j + 1) / headlightsTraffic_grid_width));
+                float falloff = (1.0 - (1.0 * (i + 1) / headlightsTraffic_grid_length));
+                float falloffp1 = (1.0 - (1.0 * (i + 2) / headlightsTraffic_grid_length));
+
+                ((int*)meshbuffer)[32] = (char)((int)(150.0 * mixDmg * mixDmg * falloff * falloff)) << 0x18 | color; //ABGR
+                ((int*)meshbuffer)[33] = (char)((int)(150.0 * mixDmgp1 * mixDmgp1 * falloff * falloff)) << 0x18 | color;
+                ((int*)meshbuffer)[34] = (char)((int)(150.0 * mixDmgp1 * mixDmgp1 * falloffp1 * falloffp1)) << 0x18 | color;
+                ((int*)meshbuffer)[35] = (char)((int)(150.0 * mixDmg * mixDmg * falloffp1 * falloffp1)) << 0x18 | color;
+
+                draw_square(*(DWORD*)(*Renderer + 0x40), 0, (float*)meshbuffer, matrix_6);
+            }
+        }
+        FUN_00777f80(*(DWORD*)(*Renderer + 0x40));
+
+    }
+
+    float __stdcall ReplaceCarShadow(DWORD CarRenderInfo, Vector4* param_3, float* carPositionMatrix, float* matrix_5, float* mat_6, int param_7) {
+        if (*GameFlow != 6) return 1.0f;
+        if (Settings::ProjectionCutoff && (*((float*)(CurrentVisualStyle + Settings::ProjectionCutoffField)) > Settings::ProjectionCutoffThresold)) return 1.0f;
+        if (HEADLIGHTS_storage == 0) return 1.0f;
+
+        //field CarRenderInfo + 43c has other data -> towards pvehicle ?
+        switch (*(int*)(*(int*)(CarRenderInfo + 0x43c) + Class43cOff_VehType)) { //0 player 1 ? 2 racer 3 cop 4 traffic 5 heli 6 ? 7 ?
+        case 0: //player
+        case 2: //racer
+            //cout << "CarRenderInfo@" << (DWORD*)CarRenderInfo << "\n";
+            //cout << "Lights combination (CRI + 0x5308) @ " << ((int*)(CarRenderInfo + 0x5308)) << " = " << (int*)*((int*)(CarRenderInfo + 0x5308)) << "\n";
+            //cout << "Class???@" << (int*)*((int*)(CarRenderInfo + 0x43c)) << " (CRI + 43c) \n";
+            //cout << "Class??? +1D00 " << (int*)*(int*)(*((int*)(CarRenderInfo + 0x43c)) + 0x1D00) << " \n";
+
+            makeHeadlightsRacer(CarRenderInfo, carPositionMatrix, mat_6);
+            break;
+        case 3: //cop
+        case 4: //traffic
+            // avoid drawing headlights in front of truck trailers
+            if (*(float*)(CarRenderInfo + 0x370) < -6.0) return 1.0f;
+
+            makeHeadlightsTraffic(CarRenderInfo, carPositionMatrix, mat_6);
+            break;
+        }
+        return 1.0f;
+    }
+
+    void* replaceCarshadowDetourReturn;
+    __declspec(naked) void replaceCarshadowDetour() {
+        __asm {
+
+            //comparison stuff
+            MOVSS      XMM0, dword ptr[ESI + 0x5840]
+            COMISS     XMM0, zero
+            JBE        LAB_008494fd
+
+            MOV        ECX, EBX
+            CALL       FUN_00520d70
+            TEST       AL, AL
+            JNZ        LAB_008494fd
+
+            CMP        dword ptr[EBX + 0x4], 0x1c
+            JZ         LAB_008494fd
+
+            //\/ one of these checks that the car is not a heli
+            MOV        EDX, dword ptr[ESI + 0x43c]
+            MOV        EAX, dword ptr[EDX + 0xe44]
+            CMP        EAX, 0x7
+            JZ         LAB_008494fd
+
+            CMP        EAX, 0x5
+            JZ         LAB_008494fd
+            //^ one of these checks that the car is not a heli
+
+            CMP        dword ptr[EBP + 0x34], 0x0   //param_12
+            JNZ        LAB_008494fd
+
+
+
+
+            MOV        EAX, dword ptr[EBP + 0x24]   //param_8
+            FLD        dword ptr[EBP + 0x38]          //param_13      [EBP+38] onto the FPU stack ST(0)
+            MOV        ECX, dword ptr[ESI + 0x4f1c]
+            PUSH       EAX
+            PUSH       ECX
+            LEA        EDX, [ESP + 0xc8]    // = > local_1d0
+            PUSH       EDX
+            LEA        EAX, [ESP + 0x8c]    // = > matrix_210
+            PUSH       EAX
+            PUSH       ECX
+            FSTP       dword ptr[ESP]       // = > local_2a4        stores ST(0) to [ESP] ???
+            LEA        ECX, [ESP + 0x64]    // = > vector4_240
+            PUSH       ECX
+            PUSH       EBX
+            MOV        ECX, ESI
+            CALL       drawCarShadow_00825430
+            FSTP       ST(0)
+
+
+            //injected function
+            //inject after carshadow for better render sort
+            MOV        EAX, dword ptr[EBP + 0x24]   //param_8
+            //FLD        dword ptr[EBP + 0x38]          //param_13      [EBP+38] onto the FPU stack ST(0)
+            MOV        ECX, dword ptr[ESI + 0x4f1c]
+            PUSH       EAX
+            PUSH       ECX
+            LEA        EDX, [ESP + 0xc8]    // = > local_1d0
+            PUSH       EDX
+            LEA        EAX, [ESP + 0x8c]    // = > matrix_210
+            PUSH       EAX
+            PUSH       ECX
+            //FSTP       dword ptr[ESP]       // = > local_2a4        stores ST(0) to [ESP] ???
+            //LEA        ECX, [ESP + 0x64]    // = > vector4_240
+            //PUSH       ECX
+            //PUSH       EBX
+            PUSH       ESI                  // replaced from MOV ECX, ESI -> thiscall to stdcall
+            CALL       ReplaceCarShadow          //float10 * 1_drawCarShadow_008254
+            FSTP       ST(0)
+
+
+
+
+        LAB_008494fd:
+            jmp replaceCarshadowDetourReturn;
+
+        }
+    }
+    __declspec(naked) void replaceCarshadowDetour_10() {
+        __asm {
+
+            MOV        ECX, EBX
+            CALL       FUN_00538df0
+            TEST       AL, AL
+            JNZ        LAB_00878b19
+
+            MOV        ECX, EBX
+            CALL       FUN_00520d70 //FUN_00538e10
+            TEST       AL, AL
+            JNZ        LAB_00878b19
+
+            MOV        EDX, dword ptr[ESI + 0x43c]
+            MOV        EAX, dword ptr[EDX + 0xad0]
+            CMP        EAX, 0x7
+            JZ         LAB_00878b19
+
+            CMP        EAX, 0x5
+            JZ         LAB_00878b19
+
+            CMP        dword ptr[EBP + 0x34], 0x0
+            JNZ        LAB_00878b19
+
+            MOV        EAX, dword ptr[EBP + 0x24]
+            FLD        dword ptr[EBP + 0x38]
+            MOV        ECX, dword ptr[ESI + 0x4f0c]
+            PUSH       EAX
+            PUSH       ECX
+            LEA        EDX, [ESP + 0xc8]
+            PUSH       EDX
+            LEA        EAX, [ESP + 0x8c]
+            PUSH       EAX
+            PUSH       ECX
+            FSTP       dword ptr[ESP]
+            LEA        ECX, [ESP + 0x64]
+            PUSH       ECX
+            PUSH       EBX
+            MOV        ECX, ESI
+            CALL       drawCarShadow_00825430
+            FSTP       ST(0)
+
+
+            //injected function
+            //inject after carshadow for better render sort
+            MOV        EAX, dword ptr[EBP + 0x24]   //param_8
+            //FLD        dword ptr[EBP + 0x38]          //param_13      [EBP+38] onto the FPU stack ST(0)
+            MOV        ECX, dword ptr[ESI + 0x4f0c] //4f1c in 1.18
+            PUSH       EAX
+            PUSH       ECX
+            LEA        EDX, [ESP + 0xc8]    // = > local_1d0
+            PUSH       EDX
+            LEA        EAX, [ESP + 0x8c]    // = > matrix_210
+            PUSH       EAX
+            PUSH       ECX
+            //FSTP       dword ptr[ESP]       // = > local_2a4        stores ST(0) to [ESP] ???
+            //LEA        ECX, [ESP + 0x64]    // = > vector4_240
+            //PUSH       ECX
+            //PUSH       EBX
+            PUSH       ESI                  // replaced from MOV ECX, ESI -> thiscall to stdcall
+            CALL       ReplaceCarShadow          //float10 * 1_drawCarShadow_008254
+            FSTP       ST(0)
+
+
+
+
+        LAB_00878b19:
+            jmp replaceCarshadowDetourReturn;
+
+        }
+    }
+
+    __declspec(naked) void getRawFlaresDetour() {
+        __asm {
+
+            mov ecx, dword ptr[esi + 0x84]; //PVehicle
+            mov eax, dword ptr[ecx + 0x9c]; //light flares
+            mov dword ptr[edi + 0xe0], eax;
+
+            pop edi;
+            pop esi;
+            add esp, 0x1c;
+            ret 0x4;
+        }
+    }
+    __declspec(naked) void getRawFlaresDetour_10() {
+        __asm {
+
+            mov ecx, dword ptr[esi + 0x84]; //PVehicle
+            mov eax, dword ptr[ecx + 0x9c]; //light flares
+            mov dword ptr[edi + 0xe0], eax;
+
+            pop edi;
+            pop esi;
+            add esp, 0x20;
+            ret 0x4;
+        }
+    }
+
+    void* setEmissiveLightsDetourReturn;
+    __declspec(naked) void setEmissiveLightsDetour() {
+        __asm {
+            MOV     EAX, dword ptr[EBP + 0x18];
+
+            TEST    dword ptr[EAX + 0x40], 0x40000000; // material flag for HEADLIGHTREFLECTOR
+            JZ      notHeadlightReflector;
+
+            TEST    EBX, 0x100000; //areHeadlightsOn (new)
+            JNZ     lightOn;
+            JMP     setEmissiveLightsDetourReturn;
+
+
+        notHeadlightReflector:
+            TEST    EBX, 0x200000; //areBrakelightsOn
+            JNZ     lightOn;
+            JMP     setEmissiveLightsDetourReturn;
+
+
+        lightOn:                               // XREF[1]:     007612ed(j)
+            MOVSS   dword ptr[ESI + 0xc], XMM1; // = > DAT_3f800000, emissive light on
+
+            JMP     setEmissiveLightsDetourReturn;
+        }
+    }
+
+    void __fastcall lightsUpdateReplacement(DWORD CarRenderInfo) {
+
+        void* pvVar3;
+        int texIDBrakeL;
+        int texIDBrakeR;
+        int texIDBGlassL;
+        int texIDBGlassR;
+        int texIDBrakeC;
+        int buffer[2];
+
+        DWORD* electricsState = (DWORD*)(CarRenderInfo + CRIoff_electricsState);
+        DWORD* lightsDamage = (DWORD*)(CarRenderInfo + CRIoff_lightsDamage);
+        DWORD* lightsGlassDamage = (DWORD*)(CarRenderInfo + CRIoff_lightsGlassDamage);
+        DWORD* headlightTextures = (DWORD*)(CarRenderInfo + CRIoff_headlightTextures);
+        DWORD* headlightGlassTextures = (DWORD*)(CarRenderInfo + CRIoff_headlightGlassTextures);
+        DWORD* brakelightTextures = (DWORD*)(CarRenderInfo + CRIoff_brakelightTextures);
+        DWORD* brakelightGlassTextures = (DWORD*)(CarRenderInfo + CRIoff_brakelightGlassTextures);
+        void* this_00 = (void*)(CarRenderInfo + CRIoff_this_00);
+
+        //get headlight texture index
+        //can't be switched to zero on vanilla cars because they lack headlight off textures
+        int texIDHeadL = 1;
+        int texIDHeadR = 1;
+        int texIDHGlassL = 1;
+        int texIDHGlassR = 1;
+
+        if ((*lightsGlassDamage & 0x00000001)) texIDHGlassL = 2;
+        if ((*lightsDamage & 0x00000001)) { texIDHeadL = 2; texIDHGlassL = 2; }
+        if ((*lightsGlassDamage & 0x00000002)) texIDHGlassR = 2;
+        if ((*lightsDamage & 0x00000002)) { texIDHeadR = 2; texIDHGlassR = 2; }
+
+        //removed unnecessary bit for headlights
+
+        //get headlights textures
+        int texHeadL = headlightTextures[texIDHeadL];
+        int texHeadR = headlightTextures[texIDHeadR];
+        int texHGlassL = headlightGlassTextures[texIDHGlassL];
+        int texHGlassR = headlightGlassTextures[texIDHGlassR];
+
+        //toggle headlight damage textures
+        pvVar3 = FUN_00521090(this_00, 0, buffer, 1);
+        FUN_00521060(pvVar3, 0, texHeadL); //headlights 
+
+        pvVar3 = FUN_00521090(this_00, 0, buffer, 2);
+        FUN_00521060(pvVar3, 0, texHeadR); //headlights (only one necessary)
+
+        pvVar3 = FUN_00521090(this_00, 0, buffer, 3);
+        FUN_00521060(pvVar3, 0, texHGlassL); //headlight glass
+
+        pvVar3 = FUN_00521090(this_00, 0, buffer, 4);
+        FUN_00521060(pvVar3, 0, texHGlassR); //headlight glass (only one necessary)
+
+        /* checks lights damage */
+        texIDBrakeL = 0;
+        texIDBrakeR = 0;
+        texIDBrakeC = 0;
+        texIDBGlassL = 0;
+        texIDBGlassR = 0;
+
+        if (!(*lightsDamage & 0x00000008)) { //left brakelight
+            if ((*electricsState & 0x00000008)) {
+                texIDBrakeL = 1;
+                texIDBGlassL = 1;
+                if ((*lightsGlassDamage & 0x00000008)) {
+                    texIDBGlassL = 2;
+                }
+            }
+        }
+        else {
+            texIDBrakeL = 2;
+            texIDBGlassL = 2;
+        }
+
+        if (!(*lightsDamage & 0x00000010)) { //right brakelight
+            if ((*electricsState & 0x00000010)) {
+                texIDBrakeR = 1;
+                texIDBGlassR = 1;
+                if ((*lightsGlassDamage & 0x00000010)) {
+                    texIDBGlassR = 2;
+                }
+            }
+        }
+        else {
+            texIDBrakeR = 2;
+            texIDBGlassR = 2;
+        }
+
+        if (!(*lightsDamage & 0x00000020)) { //center brakelight
+            if ((*electricsState & 0x00000020)) {
+                texIDBrakeC = 1;
+            }
+        }
+        else {
+            texIDBrakeC = 2;
+        }
+
+        //removed unnecessary bit for brakelights
+
+        if (*(int*)(getXNAME_string_00817940(**(DWORD**)(CarRenderInfo + 0x43c)) + 0xf4) != 2) {
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 5);
+            FUN_00521060(pvVar3, 0, brakelightTextures[(texIDBrakeL == 2) ? 2 : 0]);
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 6);
+            FUN_00521060(pvVar3, 0, brakelightTextures[(texIDBrakeR == 2) ? 2 : 0]);
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 7);
+            FUN_00521060(pvVar3, 0, brakelightTextures[(texIDBrakeC == 2) ? 2 : 0]);
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 8);
+            FUN_00521060(pvVar3, 0, brakelightGlassTextures[texIDBGlassL == 2 ? 2 : 0]);
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 9);
+            FUN_00521060(pvVar3, 0, brakelightGlassTextures[texIDBGlassR == 2 ? 2 : 0]);
+
+            pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 10);
+            FUN_00521060(pvVar3, 0, brakelightGlassTextures[texIDBrakeC == 2 ? 2 : 0]);
+
+
+            //manage headlights
+            if ((*electricsState & 0x00000003)) { //&& !(lightsDamage & 0x00000003)
+                *(int*)(CarRenderInfo + CRIoff_renderSettings) |= 0x100000;
+            }
+            else {
+                *(int*)(CarRenderInfo + CRIoff_renderSettings) &= ~0x100000;
+            }
+            //if (((texIDHeadL != 2) && (texIDHeadR != 2)) && ((texIDHGlassL != 0 && (texIDHGlassR != 0))) && (*electricsState & 0x00000003)) { //shuts off the whole car when headlights broken, not the wanted effect !
+            //    *(int*)(CarRenderInfo + 0x54c8) |= 0x100000;
+            //}
+            //else {
+            //    *(int*)(CarRenderInfo + 0x54c8) &= ~0x100000;
+            //}
+
+            //manage brakelights
+            if (((texIDBrakeL != 2) && (texIDBrakeR != 2)) && ((texIDBGlassL != 0 && (texIDBGlassR != 0)))) {
+                *(int*)(CarRenderInfo + CRIoff_renderSettings) |= 0x200000;
+            }
+            else {
+                *(int*)(CarRenderInfo + CRIoff_renderSettings) &= ~0x200000;
+            }
+            return;
+        }
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 5);
+        FUN_00521060(pvVar3, 0, brakelightTextures[texIDBrakeL]);
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 6);
+        FUN_00521060(pvVar3, 0, brakelightTextures[texIDBrakeR]);
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 7);
+        FUN_00521060(pvVar3, 0, brakelightTextures[texIDBrakeC]);
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 8);
+        FUN_00521060(pvVar3, 0, brakelightGlassTextures[texIDBGlassL]);
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 9);
+        FUN_00521060(pvVar3, 0, brakelightGlassTextures[texIDBGlassR]);
+
+        pvVar3 = (void*)FUN_00521090(this_00, 0, buffer, 10);
+        FUN_00521060(pvVar3, 0, brakelightTextures[texIDBrakeC]);
+
+        return;
+    }
+
+    void __fastcall headlightsReplacement(DWORD this_, DWORD unused, DWORD arg1) {
+
+        DWORD* PVehicle = (DWORD*)(this_ + 0xb8);
+
+        if (*(DWORD*)(this_ + 0x860) == 9999) {
+            *(char*)(this_ + 0x863) = 1; //auto mode
+            PVehicle[0x27] = PVehicle[0x27] | 0x00000007;
+
+            std::uniform_int_distribution<> headlightSensitivity(-INT16_MIN, INT16_MAX);
+            *(int16_t*)(this_ + 0x860) = headlightSensitivity(gen);
+        }
+
+        if (*((float*)(CurrentVisualStyle + Settings::AutomaticHeadlightsField)) > (Settings::AutomaticHeadlightsThresold * (1.0 + *(int16_t*)(this_ + 0x860) / 327670.0))) {
+            //auto turn off
+            if (*(char*)(this_ + 0x863) == 1) {
+                PVehicle[0x27] = PVehicle[0x27] & ~0x00000007;
+                *(char*)(this_ + 0x863) = 0;
+            }
+            //headlights forced on, do not turn off, set them back to auto if the player manually turns them off
+            if (*(char*)(this_ + 0x863) == 2) {
+                *(char*)(this_ + 0x863) = 0;
+            }
+        }
+        else {
+            if (*(char*)(this_ + 0x863) == 0) {
+                //headlights already on, save that they're forced
+                if (PVehicle[0x27] & 0x00000007) {
+                    *(char*)(this_ + 0x863) = 2;
+                }
+                //auto turn on
+                else {
+                    PVehicle[0x27] = PVehicle[0x27] | 0x00000007;
+                    *(char*)(this_ + 0x863) = 1;
+                }
+            }
+        }
+    }
+
+
+}
+
+namespace FirstCarCrash {
+    bool doFirstCarCrashFix = false;
+
+    // FROM EXTRA OPTIONS
+    DWORD _PlayerIPlayer = 0x012faa80;
+    DWORD _PlayerPVehicle = 0x012fa478;
+    int* NumCurrentIVehicleElements = (int*)0x012fa474;
+    DWORD GetPlayerPVehicle()
+    {
+        DWORD* ISimableFromIPlayer, * ISimableFromIVehicle, * PlayerPVehicle;
+
+        DWORD* PlayerIPlayer = *(DWORD**)_PlayerIPlayer; // Player 1
+
+        for (int i = 0; i < *NumCurrentIVehicleElements; i++)
+        {
+            PlayerPVehicle = *(DWORD**)(_PlayerPVehicle + i * 4);
+
+            if (PlayerIPlayer) ISimableFromIPlayer = (*(DWORD * (__thiscall**)(DWORD*))(PlayerIPlayer[0] + 0x4))(PlayerIPlayer); // RecordablePlayer::GetSimable
+            else ISimableFromIPlayer = 0;
+            if (PlayerPVehicle) ISimableFromIVehicle = (*(DWORD * (__thiscall**)(DWORD*))(PlayerPVehicle[0] + 0x4))(PlayerPVehicle); // PVehicle::GetSimable
+            else ISimableFromIVehicle = 0;
+
+            if (ISimableFromIPlayer && ISimableFromIVehicle && (ISimableFromIPlayer == ISimableFromIVehicle)) {
+                //lastPlayerPVehicle = PlayerPVehicle;
+                return (DWORD)PlayerPVehicle;
+            }
+        }
+
+        return 0;
+    }
+
+    DWORD DebugVehicleSelection = 0x01862c5c;
+    char* DebugSwitchCar = (char*)0x01862c60;
+    auto forcePlayerCar = (void(__fastcall*)(DWORD DebugVehicleSelection, DWORD something, char* carname, DWORD, DWORD, DWORD))0x00858ce0;
+    char* forceSpecificCar = 0;
+    char _forceSpecificCar[32];
+
+    void __fastcall forcePlayerCarDetour(DWORD DebugVehicleSel, DWORD something, char* carname, DWORD, DWORD, DWORD) {
+        if (forceSpecificCar != 0) {
+            forcePlayerCar(DebugVehicleSel, something, forceSpecificCar, 0, 0, 0);
+            forceSpecificCar = 0;
+        }
+        else {
+            //cout << "Using Debug Car " << carname << "\n";
+            if (!strcmp(carname, "por_cay_s_09")) carname = (char*)"por_cay_s_07"; //crash fix for 1.18
+            if (!strcmp(carname, "lam_rev_stk_08")) carname = (char*)"lam_mur_lp_06";
+
+            forcePlayerCar(DebugVehicleSel, something, carname, 0, 0, 0);
+        }
+    }
+
+    void __cdecl HUDLoadedDetour() {
+        if (doFirstCarCrashFix) {
+            doFirstCarCrashFix = false;
+
+            //carname 
+            //find player pvehicle
+            //class *(pvehicle+1c)
+            //*(class+4) is uppercase xname
+            //lowercase it and replace car
+
+            DWORD PlayerPVehicle = GetPlayerPVehicle();
+
+            _memccpy(_forceSpecificCar, *(char**)(*(DWORD*)(PlayerPVehicle + 0x1c) + 0x4), 0, 31);
+
+            for (int i = 0; i < 32; i++) {
+                _forceSpecificCar[i] = std::tolower(_forceSpecificCar[i]);
+            }
+
+            cout << "Switching player car to prevent progression loss for first car crash, forcing " << _forceSpecificCar << "\n";
+
+            *DebugSwitchCar = 1;
+            forceSpecificCar = _forceSpecificCar;
+
+        }
+
+    }
+
+    DWORD __cdecl hashBINImpersonator(char* string) {
+        DWORD result = getBinHash(string);
+        if (result == 0x16E8EF0D) { //hash for "PINK_SLIP_CAR_1"
+            doFirstCarCrashFix = true;
+            cout << "Preparing to prevent first car crash\n";
+        }
+        return result;
+    }
+
+
+}
+
+
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
@@ -731,15 +1847,69 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         switch (entry) {
         case 0x008AEC55: //UC 1.0
             getVltHash = (uint32_t(__cdecl*)(char* toHash)) 0x00463a80;
+            getBinHash = (uint32_t(__cdecl*)(char* toHash)) 0x004b3ed0;
+            MemoryAlloc = (DWORD(__cdecl*)(DWORD size, const char* name, DWORD baseAddress)) 0x006a1d30;
+            getTexture = (char* (__cdecl*)(uint32_t textureHash, int param_2, int param_3)) 0x0053cf30;
+
+            MemBlock_Global = (DWORD*)0x00d3bd98;
+            MemBlock_FE = (DWORD*)0x00d3bd9c;
+            GameFlow = (int*)0x00da57b8;
+            Renderer = (int*)0x00ea00e4;
+            FEScreenManager = (DWORD*)0x00d99354;
+
+            CurrentVisualStyle = 0x00d5ea40;
             break;
         case 0x0087ba75: //UC 1.0.1.18
             getVltHash = (uint32_t(__cdecl*)(char* toHash)) 0x0045cb10;
+            getBinHash = (uint32_t(__cdecl*)(char* toHash)) 0x004aa050;
+            MemoryAlloc = (DWORD(__cdecl*)(DWORD size, const char* name, DWORD baseAddress)) 0x00686150;
+            getTexture = (char* (__cdecl*)(uint32_t textureHash, int param_2, int param_3)) 0x005246d0;
+
+            MemBlock_Global = (DWORD*)0x00cc9328;
+            MemBlock_FE = (DWORD*)0x00cc932c;
+            GameFlow = (int*)0x012b64f8;
+            Renderer = (int*)0x013b3164;
+            FEScreenManager = (DWORD*)0x012aa044;
+
+            CurrentVisualStyle = 0x0126f100;
             break;
         default:
+            std::cout << "Unsupported EXE, most tweaks will not be applied.\n";
             break;
         }
 
         Settings::readConfig();
+
+        if (Settings::CrashFixes) switch (entry) {
+        case 0x008AEC55: //UC 1.0
+        //remove more kamikaze code
+            utils::nop(0x004b4c40, 10); //
+            utils::set<char>(0x00883a25, 0xeb); //JMP instead of JNZ
+            utils::nop(0x00881d00, 9);
+            break;
+        case 0x0087ba75: //UC 1.0.1.18
+        //remove more kamikaze code
+            utils::nop(0x004aacf0, 10); //
+            utils::set<char>(0x008547e5, 0xeb); //JMP instead of JNZ
+            utils::nop(0x00852af0, 9);
+
+            //first car crash fix (only for 1.0.1.18 - contains hardcoded function addresses !)
+            utils::jump(0x005b0947, FirstCarCrash::HUDLoadedDetour);
+            utils::call(0x005715bc, FirstCarCrash::hashBINImpersonator);
+            utils::call(0x0085a15a, FirstCarCrash::forcePlayerCarDetour);
+            break;
+        }
+
+        if (Settings::SkipBootupChecks) switch (entry) {
+        case 0x008AEC55: //UC 1.0
+            utils::nop(0x00757981, 22); //removes the CD drive check and prevents waking up all drives
+            utils::nop(0x006af1d4, 54); //removes another bootup check "nfsc.exe" / "nfsc_link.exe"
+            break;
+        case 0x0087ba75: //UC 1.0.1.18
+            utils::nop(0x0072fca1, 22); //removes the CD drive check and prevents waking up all drives
+            utils::nop(0x00693B14, 54); //removes another bootup check "nfsc.exe" / "nfsc_link.exe"
+            break;
+        }
 
         // trucks collisions fix
         if (carsModuleInstalled && Settings::FixTruckTrailers) {
@@ -813,10 +1983,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
                 }
             }
         }
-
        
+
 #if 1 // 54k crash fix
-        if (carsModuleInstalled) switch (entry) {
+        if (carsModuleInstalled && Settings::CrashFixes) switch (entry) {
         case 0x008AEC55: //UC 1.0
             GeomAlloc::loopStart = (void*)0x007a4110;
             GeomAlloc::allocateNewBlock = (void*)0x0079dc60;
@@ -832,68 +2002,71 @@ BOOL APIENTRY DllMain( HMODULE hModule,
             GeomAlloc::forceSkipExit = (void*) 0x0077777e;
             utils::jump(0x00777710, GeomAlloc::CounterReset);
             utils::jump(0x00777777, GeomAlloc::AllocOrSkip);
+
+            //cant do any wrong but probably doesnt work
+
+            utils::nop(0x00852af4, 5);
+
+            utils::set(0x008547e7, 0x5f); //POP EDI
+            utils::set(0x008547e8, 0x67); //POP ESI
+            utils::set(0x008547e9, 0x5e); //
+            utils::set(0x008547ea, 0x5d); //POP EBP
+            utils::set(0x008547eb, 0xb8); //MOV EAX, 0x0
+            utils::set(0x008547ec, 0x00000000); //
+            utils::set(0x008547f0, 0xc2); //RET 0x8
+            utils::set(0x008547f1, 0x08); //
+            utils::set(0x008547f2, 0x00); //
+
             break;
         default:
             std::cout << "Unsupported EXE, over polycount limit crash fix not applied.\n";
         }
-        if (carsModuleInstalled && Settings::GeomAllocBlockSize != 0x50000) switch (entry) {
+        if (carsModuleInstalled && Settings::IndexBufferSize != 0x50000) switch (entry) {
         case 0x008AEC55: //UC 1.0
             //alloc function
-            utils::set<int>(0x0079dcbb, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x0079dcde, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x0079dd06, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x0079dd2c, Settings::GeomAllocBlockSize);
+            utils::set<int>(0x0079dcbb, Settings::IndexBufferSize);
+            utils::set<int>(0x0079dcde, Settings::IndexBufferSize);
+            utils::set<int>(0x0079dd06, Settings::IndexBufferSize);
+            utils::set<int>(0x0079dd2c, Settings::IndexBufferSize);
 
             //other function with the same value
-            utils::set<int>(0x0077c307, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x0077c329, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x0077c350, Settings::GeomAllocBlockSize);
+            utils::set<int>(0x0077c307, Settings::IndexBufferSize);
+            utils::set<int>(0x0077c329, Settings::IndexBufferSize);
+            utils::set<int>(0x0077c350, Settings::IndexBufferSize);
             //utils::set<int>(0x018fde44, 0x100000);
             break;
         case 0x0087ba75: //UC 1.0.1.18
             //alloc function
-            utils::set<int>(0x00771e4b, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x00771e6e, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x00771e96, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x00771ebc, Settings::GeomAllocBlockSize);
+            utils::set<int>(0x00771e4b, Settings::IndexBufferSize);
+            utils::set<int>(0x00771e6e, Settings::IndexBufferSize);
+            utils::set<int>(0x00771e96, Settings::IndexBufferSize);
+            utils::set<int>(0x00771ebc, Settings::IndexBufferSize);
 
             //other function with the same value
-            utils::set<int>(0x00751117, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x00751139, Settings::GeomAllocBlockSize);
-            utils::set<int>(0x00751160, Settings::GeomAllocBlockSize);
-            //utils::set<int>(0x018fde44, 0x100000);
-            break;
-        default:
-            std::cout << "Unsupported EXE, geometry allocation block change not applied.\n";
-        } else if (!carsModuleInstalled) switch (entry) {
-        case 0x008AEC55: //UC 1.0
-            //alloc function
-            utils::set<int>(0x0079dcbb, 0x40000);
-            utils::set<int>(0x0079dcde, 0x40000);
-            utils::set<int>(0x0079dd06, 0x40000);
-            utils::set<int>(0x0079dd2c, 0x40000);
-
-            //other function with the same value
-            utils::set<int>(0x0077c307, 0x40000);
-            utils::set<int>(0x0077c329, 0x40000);
-            utils::set<int>(0x0077c350, 0x40000);
-            //utils::set<int>(0x018fde44, 0x100000);
-            break;
-        case 0x0087ba75: //UC 1.0.1.18
-            //alloc function
-            utils::set<int>(0x00771e4b, 0x40000);
-            utils::set<int>(0x00771e6e, 0x40000);
-            utils::set<int>(0x00771e96, 0x40000);
-            utils::set<int>(0x00771ebc, 0x40000);
-
-            //other function with the same value
-            utils::set<int>(0x00751117, 0x40000);
-            utils::set<int>(0x00751139, 0x40000);
-            utils::set<int>(0x00751160, 0x40000);
+            utils::set<int>(0x00751117, Settings::IndexBufferSize);
+            utils::set<int>(0x00751139, Settings::IndexBufferSize);
+            utils::set<int>(0x00751160, Settings::IndexBufferSize);
             //utils::set<int>(0x018fde44, 0x100000);
             break;
         }
 #endif // 54k crash fix
+
+#if 1
+        if (carsModuleInstalled && Settings::CarsPoolSize != 0x4e20000) switch (entry) {
+        case 0x008AEC55: //UC 1.0
+            utils::set(0x0069e819, Settings::CarsPoolSize);
+            utils::set(0x0069e828, Settings::CarsPoolSize);
+            utils::set(0x0069e888, Settings::CarsPoolSize);
+            utils::set(0x005f77ac, Settings::CarsPoolSize);
+            break;
+        case 0x0087ba75: //UC 1.0.1.18
+            utils::set(0x005dd0dc, Settings::CarsPoolSize);
+            utils::set(0x00683188, Settings::CarsPoolSize);
+            utils::set(0x00683128, Settings::CarsPoolSize);
+            utils::set(0x00683119, Settings::CarsPoolSize);
+            break;
+        }
+#endif //cars pool increase
 
 #if 1 // verbose
         if (carsModuleInstalled && Settings::verbose) switch (entry) {
@@ -956,8 +2129,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
 
             break;
-        default:
-            std::cout << "Unsupported EXE, day/night cycle not applied.\n";
         }
 #endif // Day/night cycle
 
@@ -981,14 +2152,137 @@ BOOL APIENTRY DllMain( HMODULE hModule,
                 RideHeightDetourReturn = (void*)0x0085799c;
                 utils::jump(0x00857950, RideHeightDetour_10); //not the exact same code as 1.0.1.18 !
 
-                //FERideHeightDetourReturn = (void*)0x0083fc22;
-                //utils::jump(0x0083fbe7, FERideHeightDetour_10);
+                FERideHeightDetourReturn = (void*)0x0083fc22;
+                utils::jump(0x0083fbe7, FERideHeightDetour_10);
                 break;
-            default:
-                std::cout << "Unsupported EXE, kit-specific ride height not applied.\n";
         }
 #endif // Per kit ride height
-    }
+
+#if 1
+        if (carsModuleInstalled && Settings::HeadlightTweaksEnabled) switch (entry) {
+            using namespace Headlights;
+        case 0x008AEC55: //UC 1.0
+            //makeHeadlights
+            D3DXVec3Transform = (void* (__cdecl*)(float* vec1, float* mat, float* vec2)) 0x007436f0; //__cdecl indeed
+            FUN_reset_00744290 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, int param_2)) 0x0076d8f0;
+            FUN_UV_00744220 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, char* texturePtr)) 0x0076d870;
+            draw_square = (void* (__fastcall*)(DWORD this_, DWORD unaff_edx, float* meshBuffer, float* matrix))0x007816d0;
+            FUN_00777f80 = (void* (__fastcall*)(DWORD this_))0x007a4970;
+            terrain_FUN_00864ef0 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, Vector4 * vec, char noRayCast)) 0x008963c0;
+            normalizeVector_005d9950 = (void* (__cdecl*)(Vector4 * param_1, Vector4 * param_2)) 0x005f3560;
+            terrain_FUN_0085e900 = (float(__fastcall*)(DWORD this_, DWORD unaff_edx, Vector4 * vec)) 0x0088eb40;
+
+            //lightsUpdateReplacement
+            FUN_00521090 = (void* (__fastcall*)(void* this_, DWORD unaff, int*, DWORD))0x00a1f0d0;
+            FUN_00521060 = (void* (__fastcall*)(void* this_, DWORD unaff, DWORD))0x00539170;
+            getXNAME_string_00817940 = (char* (__cdecl*)(DWORD param))0x00843630;
+
+            //asm injector
+            //DAT_00b647ec = (float*)0x;
+            drawCarShadow_00825430 = (void*)0x00851d50;
+            FUN_00520d70 = (void*)0x00538e10;
+            FUN_00538df0 = (void*)0x00538df0;
+
+            CRIoff_electricsState = 0x52f8;
+            CRIoff_lightsDamage = 0x52fc;
+            CRIoff_lightsGlassDamage = 0x5300;
+            CRIoff_headlightTextures = 0x52b8;
+            CRIoff_headlightGlassTextures = 0x52c4;
+            CRIoff_brakelightTextures = 0x52d0;
+            CRIoff_brakelightGlassTextures = 0x52dc;
+            CRIoff_this_00 = 0x8c8;
+            CRIoff_renderSettings = 0x54b8;
+            CRIoff_terrainAdj = 0x4ac;
+            CRIoff_MPointsArrayPtr = 0x4b4;
+
+            Class43cOff_VehType = 0xad0;
+
+            //projection
+            utils::call(0x0087b23b, getHeadlightsTexture);
+            utils::jump(0x00878ab6, replaceCarshadowDetour_10); //seems similar enough to use the same detour ??? theres a few less tests though
+            replaceCarshadowDetourReturn = (void*)0x00878b19;
+
+            //get raw flare status without damage
+            utils::set(0x72f223, (char)0xEB); //jmp short
+            utils::set(0x72f224, (char)0x27); //jmp to 70826c (actually the same distance as in 1.18, shit is compiled the exact same)
+            utils::jump(0x0072f864, getRawFlaresDetour_10);
+
+            //link emissive headlights to flare headlights
+            //THERES AN OFFSET IN CARRENDERINFO
+            utils::nop(0x0078d290, 6); //remove early assembler instruction in cBBFXCar::...
+            utils::jump(0x0078d2ad, setEmissiveLightsDetour);
+            setEmissiveLightsDetourReturn = (void*)0x0078d2c0;
+            utils::call(0x00878834, lightsUpdateReplacement); //replace bullshit function
+            utils::set<char>(0x0087a5eb, 0x00); //fix stuck brakelights on car spawn (might be fixed by my other function anyways)
+
+            //automatic headlights
+            if (Settings::AutomaticHeadlights) utils::call(0x006d245c, headlightsReplacement);
+
+            break;
+        case 0x0087ba75: //UC 1.0.1.18
+            //makeHeadlights
+            D3DXVec3Transform = (void* (__cdecl*)(float* vec1, float* mat, float* vec2)) 0x0071b820; //__cdecl indeed
+            FUN_reset_00744290 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, int param_2)) 0x00744290;
+            FUN_UV_00744220 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, char* texturePtr)) 0x00744220;
+            draw_square = (void* (__fastcall*)(DWORD this_, DWORD unaff_edx, float* meshBuffer, float* matrix))0x00755d80;
+            FUN_00777f80 = (void* (__fastcall*)(DWORD this_))0x00777f80;
+            terrain_FUN_00864ef0 = (void(__fastcall*)(DWORD this_, DWORD unaff_edx, int param_1, Vector4 * vec, char noRayCast)) 0x00864ef0;
+            normalizeVector_005d9950 = (void* (__cdecl*)(Vector4 * param_1, Vector4 * param_2)) 0x005d9950;
+            terrain_FUN_0085e900 = (float(__fastcall*)(DWORD this_, DWORD unaff_edx, Vector4 * vec)) 0x0085e900;
+
+            //lightsUpdateReplacement
+            FUN_00521090 = (void* (__fastcall*)(void* this_, DWORD unaff, int*, DWORD))0x00521090;
+            FUN_00521060 = (void* (__fastcall*)(void* this_, DWORD unaff, DWORD))0x00521060;
+            getXNAME_string_00817940 = (char* (__cdecl*)(DWORD param))0x00817940;
+
+            //asm injector
+            //DAT_00b647ec = (float*)0x00b647ec;
+            drawCarShadow_00825430 = (void*)0x00825430;
+            FUN_00520d70 = (void*)0x00520d70;
+
+            //CarRenderInfo offsets
+            CRIoff_electricsState = 0x5308;
+            CRIoff_lightsDamage = 0x530c;
+            CRIoff_lightsGlassDamage = 0x5310;
+            CRIoff_headlightTextures = 0x52c8;
+            CRIoff_headlightGlassTextures = 0x52d4;
+            CRIoff_brakelightTextures = 0x52e0;
+            CRIoff_brakelightGlassTextures = 0x52ec;
+            CRIoff_this_00 = 0x8d4;
+            CRIoff_renderSettings = 0x54c8;
+            CRIoff_terrainAdj = 0x4b8;
+            CRIoff_MPointsArrayPtr = 0x4C0;
+
+            Class43cOff_VehType = 0xe44;
+
+            //projection
+            utils::call(0x0084bc2a, getHeadlightsTexture);
+            utils::jump(0x0084948e, replaceCarshadowDetour);
+            replaceCarshadowDetourReturn = (void*)0x008494fd;
+
+            //get raw flare status without damage
+            utils::set(0x708243, (char)0xEB); //jmp short
+            utils::set(0x708244, (char)0x27); //jmp to 70826c
+            utils::jump(0x00708847, getRawFlaresDetour);
+
+            //link emissive headlights to flare headlights
+            utils::nop(0x007612d0, 6); //remove early assembler instruction in cBBFXCar::...
+            utils::jump(0x007612ED, setEmissiveLightsDetour);
+            setEmissiveLightsDetourReturn = (void*)0x00761300;
+            utils::call(0x008491ed, lightsUpdateReplacement); //replace bullshit function
+            utils::set<char>(0x0084b01f, 0x00); //fix stuck brakelights on car spawn (might be fixed by my other function anyways)
+
+            //automatic headlights
+            if (Settings::AutomaticHeadlights) utils::call(0x006b6e1c, headlightsReplacement);
+
+            break;
+        }
+#endif // Headlights
+
+
+
+
+    } //dllmain
 
     //for (auto c : Settings::VisualStyleCycles) {
     //    for (auto w : c) {

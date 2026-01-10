@@ -90,7 +90,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <OutputFile>D:\Jeux\UCE 1.0.1.18\scripts\UndercoverExposed.asi</OutputFile>
+      <OutputFile>C:\jeux\UCE 1.0.1.18\scripts\UndercoverExposed.asi</OutputFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -111,7 +111,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <OutputFile>D:\Jeux\UCE 1.0.1.18\scripts\UndercoverExposed.asi</OutputFile>
+      <OutputFile>C:\jeux\UCE 1.0.1.18\scripts\UndercoverExposed.asi</OutputFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
