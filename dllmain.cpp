@@ -2623,6 +2623,27 @@ BOOL APIENTRY DllMain( HMODULE hModule,
             using namespace FEAftermarketMenu;
         case 0x008AEC55: //UC 1.0
 
+            FETreeDataNode_constructor = (FETreeDataNode * (__fastcall*)(FETreeDataNode * this_, DWORD unaff, DWORD, char*, DWORD, DWORD)) 0x005612f0;
+            FE_getFeElement = (DWORD(__fastcall*)(DWORD this_, DWORD unaff, DWORD)) 0x00551dc0;
+            AddToTree = (void* (__fastcall*)(DWORD this_, DWORD unaff, LinkedNode*, DWORD)) 0x0056f520;
+            FUN_00553aa0 = (void(__fastcall*)(LinkedNode * this_)) 0x00652910;
+
+            StandardSelectablePart__GetPartsList_005d1b00 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD)) 0x005eb120;
+            AutosculptSelectablePart__GetPartsList_005d40e0 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD, DWORD, DWORD)) 0x005ed530;
+            FUN_getLinkedListLength_004a76f0 = (DWORD(__fastcall*)(LinkedNode * this_, DWORD unaff, DWORD)) 0x004b0760;
+
+
+            utils::call(0x005a99d1, LoadAftermarketMenu);
+
+            utils::call(0x005676a5, getSelectedPartID);
+            utils::call(0x00581545, getSelectedPartID);
+
+            utils::call(0x0059f053, getPartsList);
+
+            utils::call(0x005e95cf, getAutosculptZone); //crash fix
+            utils::call(0x005ea07d, getAutosculptZone);
+            utils::call(0x005ea15e, getAutosculptZone);
+
             break;
         case 0x0087ba75: //UC 1.0.1.18
 
