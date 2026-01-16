@@ -85,6 +85,9 @@ namespace Settings{
     static int ProjectionCutoffField = 0x60;
     static float ProjectionCutoffThresold = 0.5;
 
+    static bool ExtendAftermarketMenu = false;
+    static vector<pair<DWORD, char*>> AftermarketMenu;
+
     static void getConfigSetting(string setting, string line, int* ret) {
         if (line.find(setting + " ") == 0) {
             int value = line.find("=") + 1;
@@ -193,40 +196,102 @@ namespace Settings{
         }
     }
 
+    static void getConfigSettingMenuItem(string setting, string line, vector<pair<DWORD, char*>> * Menu) {
+        if (line.find(setting + " ") == 0) {
+
+            //vector<string> *tempNames = new vector<string>();
+            DWORD ItemKey;
+            char* ItemName;
+
+
+            uint32_t i = line.find("=") + 1;
+            while (line.at(i) == ' ' || line.at(i) == '\t') i++;
+            if (line.at(i) == '0' && line.at(i + 1) == 'x') {
+                sscanf_s(line.substr(i, std::string::npos).c_str(), "%x", &ItemKey);
+            }
+            else {
+                sscanf_s(line.substr(i, std::string::npos).c_str(), "%d", &ItemKey);
+            }
+
+            i = line.find(",") + 1;
+            while (line.at(i) == ' ' || line.at(i) == '\t') i++;
+            ItemName = new char [32];
+            int j = 0;
+            while (i < line.length() && j < 31 && (!(line.at(i) == '/' && line.at(i+1) == '/'))) {
+                ItemName[j] = line.at(i);
+                i++;
+                j++;
+            }
+            while (ItemName[j] == ' ' || ItemName[j] == '\t') {
+                ItemName[j] = 0;
+                j--;
+            }
+            ItemName[j] = 0;
+
+            //cout << "Key " << (DWORD*)ItemKey << " / Text " << ItemName << "\n";
+            auto p = new pair<DWORD, char*>(ItemKey, ItemName);
+            Menu->push_back(*p);
+        }
+    }
+
     static void readConfig() {
 
         struct stat confEx;
         if (stat("UndercoverExposed.ini", &confEx) == -1) {
             std::ofstream configFile("UndercoverExposed.ini");
             configFile << R"([Fixes]
-Verbose = 1				//includes additional debugging information
-CrashFixes = 1				//fixes various crashes, some specific to Exposed
-IndexBufferSize = 0xA0000		//increases IndexBufferSize, vanilla = 0x50000
-CarsPoolSize = 0x8000000		//increases Cars pool size, vanilla = 0x4e20000
-FixTruckTrailers = 1			//fixes tractor-trailer linking broken by Binary 2.8.3
+Verbose = 1                             //includes additional debugging information
+CrashFixes = 1                          //fixes various crashes, some specific to Exposed
+IndexBufferSize = 0xA0000               //increases IndexBufferSize, vanilla = 0x50000
+CarsPoolSize = 0x8000000                //increases Cars pool size, vanilla = 0x4e20000
+FixTruckTrailers = 1                    //fixes tractor-trailer linking broken by Binary 2.8.3
 LastGoodGlobalB = 1242129289
 
 [Features: Miscellaneous]
-KitRideHeightEnabled = 1		//enables per-kit ride height on some cars
-SkipBootupChecks = 1			//skips some unnecessary bootup checks
+KitRideHeightEnabled = 1                //enables per-kit ride height on some cars
+SkipBootupChecks = 1                    //skips some unnecessary bootup checks
 
 [Features: Day and Night Cycle]
-DayNightCycleEnabled = 1		//enables the day and night cycle
-DayNightCycleRandomStart = 1		//starts the cycle at a random time instead of its beginning
-DayNightCycleDuration = 1440		//total cycle duration in seconds, default is 1440 (24 minutes)
+DayNightCycleEnabled = 1                //enables the day and night cycle
+DayNightCycleRandomStart = 1            //starts the cycle at a random time instead of its beginning
+DayNightCycleDuration = 1440            //total cycle duration in seconds, default is 1440 (24 minutes)
 DayNightCycle = [ [sunny6_0,sunny4_22.5,sunny2_45,lessnukedsunny_90,wet_135,wet2_150,wet3_180,wet_180,sunny7_180,sunset_180,sunset3_180,night_4_180,night_2_210,night_3_240,night_7_270,night_1_300,night_6_330,night_5_360]]
 //array of weather sets, all weather sets must have the same amount of visual zones for better results
+//other example, uncomment to use
 //DayNightCycleDuration = 300
 //DayNightCycle = ((sunny6_0,sunny4_22.5),(sunny2_45,lessnukedsunny_90),(wet_135,wet2_150),(wet3_180,wet_180),(sunny7_180),(sunset_180,sunset3_180),(night_4_180,night_2_210),(night_3_240,night_7_270),(night_1_300,night_6_330),(night_5_360, night_1_300))
 
 [Features: Headlights]
-HeadlightTweaksEnabled = 1		//enables headlight projection and toggling emissive textures with headlights
-AutomaticHeadlights = 1			//toggles headlights on when it's dark and off when not
-AutomaticHeadlightsField = 0x60		//brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
-AutomaticHeadlightsThresold = 0.5	//brightness thresold value, each car will use a slightly different value near this
-ProjectionCutoff = 1			//controls whether headlights projection is turned off when it's too bright regardless of headlights state
-ProjectionCutoffField = 0x60		//brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
-ProjectionCutoffThresold = 0.5		//brightness thresold value
+HeadlightTweaksEnabled = 1              //enables headlight projection and toggling emissive textures with headlights
+AutomaticHeadlights = 1                 //toggles headlights on when it's dark and off when not (headlights are always on when set to zero)
+AutomaticHeadlightsField = 0x60         //brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
+AutomaticHeadlightsThresold = 0.6       //brightness thresold value, each car will use a slightly different value near this
+ProjectionCutoff = 1                    //controls whether headlights projection is turned off when it's too bright regardless of headlights state
+ProjectionCutoffField = 0x60            //brightness thresold field offset in current visual zone (0x60/64/68/6c = SunColourR/G/B/A, 0x70/74/78/7c = AmbientColourR/G/B/A)
+ProjectionCutoffThresold = 0.5          //brightness thresold value
+
+[Features: Aftermarket Menu]
+ExtendAftermarketMenu = 1               //include more parts in the Aftermarket menu (experimental)
+AftermarketMenuOption = 0x93, Body      //CarPartID, button label (for CarPartID see https://github.com/SpeedReflect/Nikki/blob/master/Nikki/Reflection/Enum/SlotID/SlotUndercover.cs)
+AftermarketMenuOption = 0x94, Hood      //IDs between 0x93-0x99 are specific to this menu and have hardcoded behavior
+AftermarketMenuOption = 0x95, All Wheels
+AftermarketMenuOption = 0x96, Front Wheels
+AftermarketMenuOption = 0x97, Rear Wheels
+AftermarketMenuOption = 0x98, Spoiler
+AftermarketMenuOption = 0x99, Exhaust
+AftermarketMenuOption = 0x17, - Extended (experimental) -
+AftermarketMenuOption = 0x12, Front Bumper
+AftermarketMenuOption = 0x14, Rear Bumper
+AftermarketMenuOption = 0x59, Left Side Skirt
+AftermarketMenuOption = 0x5A, Right Side Skirt
+AftermarketMenuOption = 0x48, Front Left Fender
+AftermarketMenuOption = 0x49, Front Right Fender
+AftermarketMenuOption = 0x13, Pop-Up Headlights         //BUMPER_FRONT_EXTRA
+AftermarketMenuOption = 0x51, Roll Cage
+AftermarketMenuOption = 0x55, Left Seat
+AftermarketMenuOption = 0x56, Right Seat
+AftermarketMenuOption = 0x52, Roof
+AftermarketMenuOption = 0x5D, Trunk
 )";
             configFile.flush();
             configFile.close();
@@ -235,31 +300,38 @@ ProjectionCutoffThresold = 0.5		//brightness thresold value
         std::string line;
 
         while (std::getline(configFile, line)) {
-            getConfigSetting("Verbose", line, &Settings::verbose);
-            getConfigSetting("CrashFixes", line, &CrashFixes);
-            getConfigSetting("FixTruckTrailers", line, &Settings::FixTruckTrailers);
-            getConfigSetting("LastGoodGlobalB", line, &Settings::lastGoodGlobalB);
-            getConfigSetting("GeomAllocBlockSize", line, &Settings::IndexBufferSize);
-            getConfigSetting("IndexBufferSize", line, &Settings::IndexBufferSize);
-            getConfigSetting("CarsPoolSize", line, &Settings::CarsPoolSize);
+            try {
+                getConfigSetting("Verbose", line, &Settings::verbose);
+                getConfigSetting("CrashFixes", line, &CrashFixes);
+                getConfigSetting("FixTruckTrailers", line, &Settings::FixTruckTrailers);
+                getConfigSetting("LastGoodGlobalB", line, &Settings::lastGoodGlobalB);
+                getConfigSetting("GeomAllocBlockSize", line, &Settings::IndexBufferSize);
+                getConfigSetting("IndexBufferSize", line, &Settings::IndexBufferSize);
+                getConfigSetting("CarsPoolSize", line, &Settings::CarsPoolSize);
 
-            getConfigSetting("EnableKitRideHeight", line, &Settings::KitRideHeight);
-            getConfigSetting("KitRideHeightEnabled", line, &Settings::KitRideHeight);
-            getConfigSetting("SkipBootupChecks", line, &Settings::SkipBootupChecks);
+                getConfigSetting("EnableKitRideHeight", line, &Settings::KitRideHeight);
+                getConfigSetting("KitRideHeightEnabled", line, &Settings::KitRideHeight);
+                getConfigSetting("SkipBootupChecks", line, &Settings::SkipBootupChecks);
 
-            getConfigSetting("DayNightCycleEnabled", line, &Settings::useDayNightCycle);
-            getConfigSetting("DayNightCycleDuration", line, &Settings::DayNightCycleDuration);
-            getConfigSetting("DayNightCycleRandomStart", line, &Settings::DayNightCycleRandomStart);
-            getConfigSettingVltHash2DArray("DayNightCycle", line, &Settings::VisualStyleCycles);
+                getConfigSetting("DayNightCycleEnabled", line, &Settings::useDayNightCycle);
+                getConfigSetting("DayNightCycleDuration", line, &Settings::DayNightCycleDuration);
+                getConfigSetting("DayNightCycleRandomStart", line, &Settings::DayNightCycleRandomStart);
+                getConfigSettingVltHash2DArray("DayNightCycle", line, &Settings::VisualStyleCycles);
 
-            getConfigSetting("HeadlightTweaksEnabled", line, &HeadlightTweaksEnabled);
-            getConfigSetting("AutomaticHeadlights", line, &AutomaticHeadlights);
-            getConfigSetting("AutomaticHeadlightsField", line, &AutomaticHeadlightsField);
-            getConfigSetting("AutomaticHeadlightsThresold", line, &AutomaticHeadlightsThresold);
-            getConfigSetting("ProjectionCutoff", line, &ProjectionCutoff);
-            getConfigSetting("ProjectionCutoffField", line, &ProjectionCutoffField);
-            getConfigSetting("ProjectionCutoffThresold", line, &ProjectionCutoffThresold);
+                getConfigSetting("HeadlightTweaksEnabled", line, &HeadlightTweaksEnabled);
+                getConfigSetting("AutomaticHeadlights", line, &AutomaticHeadlights);
+                getConfigSetting("AutomaticHeadlightsField", line, &AutomaticHeadlightsField);
+                getConfigSetting("AutomaticHeadlightsThresold", line, &AutomaticHeadlightsThresold);
+                getConfigSetting("ProjectionCutoff", line, &ProjectionCutoff);
+                getConfigSetting("ProjectionCutoffField", line, &ProjectionCutoffField);
+                getConfigSetting("ProjectionCutoffThresold", line, &ProjectionCutoffThresold);
 
+                getConfigSetting("ExtendAftermarketMenu", line, &ExtendAftermarketMenu);
+                getConfigSettingMenuItem("AftermarketMenuOption", line, &AftermarketMenu);
+            }
+            catch (exception) {
+
+            }
         }
         configFile.close();
 
@@ -787,8 +859,8 @@ namespace KitRideHeight {
 }
 
 namespace Headlights {
-#define HEADLIGHT_LEFT 0xA7E6EA53
-#define HEADLIGHT_RIGHT 0xA532FC46
+#define bin_HEADLIGHT_LEFT 0xA7E6EA53
+#define bin_HEADLIGHT_RIGHT 0xA532FC46
 
     char* HEADLIGHTS_storage = 0;
     void getHeadlightsTexture() {
@@ -813,7 +885,7 @@ namespace Headlights {
                 DWORD MPData = *(DWORD*)(CurMPoint + 0x8);
                 DWORD hash = *(DWORD*)(MPData + 0x8);
                 //cout << "MPoint @" << CurMPoint << "; hash " << (DWORD*)hash << "\n";
-                if (hash == HEADLIGHT_LEFT || hash == HEADLIGHT_RIGHT) {
+                if (hash == bin_HEADLIGHT_LEFT || hash == bin_HEADLIGHT_RIGHT) {
                     *(DWORD*)(CarRenderInfo + 0x4) = 1;
                     //cout << "is headlight\n";
                     return true;
@@ -1791,6 +1863,273 @@ namespace FirstCarCrash {
 
 }
 
+namespace FEAftermarketMenu {
+
+    struct LinkedNode {
+        LinkedNode* previous;
+        LinkedNode* next;
+    };
+
+    struct FETreeDataNode {
+        DWORD vftable;
+        LinkedNode nodeLinking_0x4;
+        //    DWORD field2_0x8;
+        DWORD field3_0xc;
+        DWORD NameHash_0x10;
+        DWORD field5_0x14;
+        DWORD id_0x18;
+        DWORD field7_0x1c;
+        char* label_0x20;
+        DWORD field9_0x24;
+        char field_0x28;
+        char field_0x29;
+        char field_0x2a;
+        char field_0x2b;
+    };
+
+    enum CarPartID {
+        BADGING_BUMPER_SET_FRONT = 0x00,
+        BADGING_BUMPER_SET_REAR = 0x01,
+        BADGING_FENDER_FRONT_LEFT = 0x02,
+        BADGING_FENDER_FRONT_RIGHT = 0x03,
+        BADGING_FENDER_REAR_LEFT = 0x04,
+        BADGING_FENDER_REAR_RIGHT = 0x05,
+        BADGING_TRUNK = 0x06,
+        BASE = 0x07,
+        BODY = 0x08,
+        BODY_DOORLINE = 0x09,
+        BRAKE_CALIPER_FRONT = 0x0A,
+        BRAKE_CALIPER_REAR = 0x0B,
+        BRAKE_ROTOR_FRONT = 0x0C,
+        BRAKE_ROTOR_REAR = 0x0D,
+        BRAKELIGHT_GLASS_LEFT = 0x0E,
+        BRAKELIGHT_GLASS_RIGHT = 0x0F,
+        BRAKELIGHT_LEFT = 0x10,
+        BRAKELIGHT_RIGHT = 0x11,
+        BUMPER_FRONT = 0x12,
+        BUMPER_FRONT_EXTRA = 0x13,
+        BUMPER_REAR = 0x14,
+        BUMPER_REAR_EXTRA = 0x15,
+        CHASSIS = 0x16,
+        DAMAGE_BODY = 0x17,
+        DAMAGE_BRAKELIGHT_LEFT = 0x18,
+        DAMAGE_BRAKELIGHT_RIGHT = 0x19,
+        DAMAGE_BUMPER_FRONT = 0x1A,
+        DAMAGE_BUMPER_REAR = 0x1B,
+        DAMAGE_DOOR_LEFT = 0x1C,
+        DAMAGE_DOOR_REAR_LEFT = 0x1D,
+        DAMAGE_DOOR_REAR_RIGHT = 0x1E,
+        DAMAGE_DOOR_RIGHT = 0x1F,
+        DAMAGE_FENDER_FRONT_LEFT = 0x20,
+        DAMAGE_FENDER_FRONT_RIGHT = 0x21,
+        DAMAGE_HEADLIGHT_LEFT = 0x22,
+        DAMAGE_HEADLIGHT_RIGHT = 0x23,
+        DAMAGE_HOOD = 0x24,
+        DAMAGE_SIDEMIRROR_LEFT = 0x25,
+        DAMAGE_SIDEMIRROR_RIGHT = 0x26,
+        DAMAGE_TRUNK = 0x27,
+        DAMAGE_TRUNK911 = 0x28,
+        DAMAGE_WIDEBODY = 0x29,
+        DAMAGE_WIDEBODY_BUMPER_FRONT = 0x2A,
+        DAMAGE_WIDEBODY_BUMPER_REAR = 0x2B,
+        DAMAGE_WIDEBODY_DOOR_LEFT = 0x2C,
+        DAMAGE_WIDEBODY_DOOR_REAR_LEFT = 0x2D,
+        DAMAGE_WIDEBODY_DOOR_REAR_RIGHT = 0x2E,
+        DAMAGE_WIDEBODY_DOOR_RIGHT = 0x2F,
+        DAMAGE_WIDEBODY_FENDER_FRONT_LEFT = 0x30,
+        DAMAGE_WIDEBODY_FENDER_FRONT_RIGHT = 0x31,
+        DAMAGE_WINDOW_FRONT = 0x32,
+        DAMAGE_WINDOW_FRONT_LEFT = 0x33,
+        DAMAGE_WINDOW_FRONT_RIGHT = 0x34,
+        DAMAGE_WINDOW_REAR = 0x35,
+        DAMAGE_WINDOW_REAR_LEFT = 0x36,
+        DAMAGE_WINDOW_REAR_RIGHT = 0x37,
+        DECAL_FRONT_WINDOW = 0x38,
+        DECAL_REAR_WINDOW = 0x39,
+        DOOR_LEFT = 0x3A,
+        DOOR_REAR_LEFT = 0x3B,
+        DOOR_REAR_RIGHT = 0x3C,
+        DOOR_RIGHT = 0x3D,
+        DOORHANDLE_FRONT_LEFT = 0x3E,
+        DOORHANDLE_FRONT_RIGHT = 0x3F,
+        DOORHANDLE_REAR_LEFT = 0x40,
+        DOORHANDLE_REAR_RIGHT = 0x41,
+        DRIVER = 0x42,
+        ENGINE = 0x43,
+        EXHAUST = 0x44,
+        EXHAUST_TIPS_CENTER = 0x45,
+        EXHAUST_TIPS_LEFT = 0x46,
+        EXHAUST_TIPS_RIGHT = 0x47,
+        FENDER_FRONT_LEFT = 0x48,
+        FENDER_FRONT_RIGHT = 0x49,
+        HEADLIGHT_GLASS_LEFT = 0x4A,
+        HEADLIGHT_GLASS_RIGHT = 0x4B,
+        HEADLIGHT_LEFT = 0x4C,
+        HEADLIGHT_RIGHT = 0x4D,
+        HOOD = 0x4E,
+        LICENSE_PLATE = 0x4F,
+        LIGHTBAR = 0x50,
+        ROLL_CAGE = 0x51,
+        ROOF = 0x52,
+        ROOF_INSIDE = 0x53,
+        ROOFSCOOP = 0x54,
+        SEAT_LEFT = 0x55,
+        SEAT_RIGHT = 0x56,
+        SIDEMIRROR_LEFT = 0x57,
+        SIDEMIRROR_RIGHT = 0x58,
+        SKIRT_LEFT = 0x59,
+        SKIRT_RIGHT = 0x5A,
+        SPOILER = 0x5B,
+        STEERINGWHEEL = 0x5C,
+        TRUNK = 0x5D,
+        UNIVERSAL_SPOILER_BASE = 0x5E,
+        WHEEL_FRONT = 0x5F,
+        WHEEL_REAR = 0x60,
+        WINDOW_FRONT = 0x61,
+        WINDOW_FRONT_LEFT = 0x62,
+        WINDOW_FRONT_RIGHT = 0x63,
+        WINDOW_REAR = 0x64,
+        WINDOW_REAR_LEFT = 0x65,
+        WINDOW_REAR_RIGHT = 0x66,
+        BRAKE_PACKAGE = 0x67,
+        DRIVETRAIN_PACKAGE = 0x68,
+        ENGINE_PACKAGE = 0x69,
+        FORCED_INDUCTION_PACKAGE = 0x6A,
+        INTERIOR = 0x6B,
+        LIVERY = 0x6C,
+        NITROUS_PACKAGE = 0x6D,
+        SUSPENSION_PACKAGE = 0x6E,
+        TIRE_FRONT = 0x6F,
+        TIRE_PACKAGE = 0x70,
+        TIRE_REAR = 0x71,
+        VECTORVINYL = 0x72
+    };
+
+    auto FETreeDataNode_constructor = (FETreeDataNode * (__fastcall*)(FETreeDataNode * this_, DWORD unaff, DWORD, char*, DWORD, DWORD)) 0x00548210;
+    auto FE_getFeElement = (DWORD(__fastcall*)(DWORD this_, DWORD unaff, DWORD)) 0x005391d0;
+    auto AddToTree = (void* (__fastcall*)(DWORD this_, DWORD unaff, LinkedNode*, DWORD)) 0x005563c0;
+    auto FUN_00553aa0 = (void(__fastcall*)(LinkedNode * this_)) 0x00553aa0;
+
+    auto StandardSelectablePart__GetPartsList_005d1b00 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD)) 0x005d1b00;
+    auto AutosculptSelectablePart__GetPartsList_005d40e0 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD, DWORD, DWORD)) 0x005d40e0;
+    auto FUN_getLinkedListLength_004a76f0 = (DWORD(__fastcall*)(LinkedNode * this_, DWORD unaff, DWORD)) 0x004a76f0;
+
+    void __cdecl LoadAftermarketMenu() {
+        LinkedNode local_14;
+        LinkedNode* current;
+        FETreeDataNode* curTreeNode;
+
+        local_14.next = &local_14;
+        local_14.previous = &local_14;
+
+        for (int i = 0; i < Settings::AftermarketMenu.size(); i++) {
+            curTreeNode = (FETreeDataNode*)MemoryAlloc(0x2c, "FETreeDataNode", *MemBlock_FE);
+            if (curTreeNode != NULL) {
+                curTreeNode = FETreeDataNode_constructor(curTreeNode, 0, Settings::AftermarketMenu.at(i).first, Settings::AftermarketMenu.at(i).second, 0xffffffff, 0xffffffff);
+                current = &curTreeNode->nodeLinking_0x4;
+                (local_14.next)->previous = current;
+                current->next = local_14.next;
+                current->previous = &local_14;
+                local_14.next = current;
+            }
+        }
+
+        AddToTree(FE_getFeElement(*FEScreenManager, 0, 0x28), 0, &local_14, 0);
+        FUN_00553aa0(&local_14);
+
+    }
+
+    DWORD __fastcall getSelectedPartID(DWORD this_) {
+        switch (*(DWORD*)(this_ + 0x58)) {
+            //original menu
+        case 0x93:
+            return 8;
+        case 0x94:
+            return 0x4e;
+        case 0x95:
+        case 0x96:
+            //wheel front and all wheels
+            return 0x5f;
+        case 0x97:
+            return 0x60;
+        case 0x98:
+            return 0x5b;
+        case 0x99:
+            return 0x44;
+        }
+        return *(DWORD*)(this_ + 0x58);
+    }
+
+    DWORD __fastcall getPartsList(DWORD this_) {
+
+        DWORD PartID = getSelectedPartID(this_);
+        DWORD PartID2 = 0x73; //only works fine for wheels
+        bool singlePart = true;
+
+        LinkedNode* this_00 = (LinkedNode*)(this_ + 0x50);
+
+        FUN_00553aa0(this_00);
+        *(DWORD*)(this_ + 0x5c) = 0;
+
+        if (PartID >= 0x100) {
+            singlePart = false;
+            PartID2 = (PartID >> 8) & 0xFF;
+            PartID = PartID & 0xFF;
+        }
+
+
+        if (*(DWORD*)(this_ + 0x58) == 0x99) { //exhaust
+            StandardSelectablePart__GetPartsList_005d1b00(PartID, (int)this_00, 0, 0);
+        }
+        else {
+            if (*(DWORD*)(this_ + 0x58) == 0x95) {
+                PartID2 = 0x60; //all wheels
+                singlePart = false;
+            }
+            AutosculptSelectablePart__GetPartsList_005d40e0(PartID, (int)this_00, 0, 0, singlePart, PartID2);
+        }
+
+        return FUN_getLinkedListLength_004a76f0(this_00, 0, 0x0);
+    }
+
+
+    DWORD __cdecl getAutosculptZone(CarPartID id) {
+        switch (id) {
+        case BUMPER_FRONT:
+            return 0;
+        case BUMPER_REAR:
+            return 1;
+        case SKIRT_LEFT:
+        case SKIRT_RIGHT:
+            return 2;
+        case WHEEL_FRONT:
+            return 4;
+        case WHEEL_REAR:
+            return 5;
+        case FENDER_FRONT_LEFT:
+        case FENDER_FRONT_RIGHT:
+            return 10;
+        case BODY:
+            return 12;
+        case HOOD:
+            return 13;
+        case SPOILER:
+            return 14;
+        case ROOFSCOOP:
+            return 15;
+        case ROOF:
+            return 16;
+        case EXHAUST:
+            return 17;
+        case BUMPER_FRONT_EXTRA:
+            return 29;
+        default:
+            return 3; //40 default but causes crashes
+        }
+    }
+
+}
+
 
 
 BOOL APIENTRY DllMain( HMODULE hModule,
@@ -2279,7 +2618,37 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         }
 #endif // Headlights
 
+#if 1
+        if (carsModuleInstalled && Settings::ExtendAftermarketMenu) switch (entry) {
+            using namespace FEAftermarketMenu;
+        case 0x008AEC55: //UC 1.0
 
+            break;
+        case 0x0087ba75: //UC 1.0.1.18
+
+            FETreeDataNode_constructor = (FETreeDataNode * (__fastcall*)(FETreeDataNode * this_, DWORD unaff, DWORD, char*, DWORD, DWORD)) 0x00548210;
+            FE_getFeElement = (DWORD(__fastcall*)(DWORD this_, DWORD unaff, DWORD)) 0x005391d0;
+            AddToTree = (void* (__fastcall*)(DWORD this_, DWORD unaff, LinkedNode*, DWORD)) 0x005563c0;
+            FUN_00553aa0 = (void(__fastcall*)(LinkedNode * this_)) 0x00553aa0;
+
+            StandardSelectablePart__GetPartsList_005d1b00 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD)) 0x005d1b00;
+            AutosculptSelectablePart__GetPartsList_005d40e0 = (void(__cdecl*)(DWORD, DWORD, DWORD, DWORD, DWORD, DWORD)) 0x005d40e0;
+            FUN_getLinkedListLength_004a76f0 = (DWORD(__fastcall*)(LinkedNode * this_, DWORD unaff, DWORD)) 0x004a76f0;
+
+
+            utils::call(0x00595021, LoadAftermarketMenu);
+
+            utils::call(0x0054e4a5, getSelectedPartID);
+            utils::call(0x00567c35, getSelectedPartID);
+
+            utils::call(0x00588fc3, getPartsList);
+
+            utils::call(0x005cfc9f, getAutosculptZone); //crash fix
+            utils::call(0x005d074d, getAutosculptZone);
+            utils::call(0x005d082e, getAutosculptZone);
+            break;
+        }
+#endif //FE aftermarket menu
 
 
     } //dllmain
