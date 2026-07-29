@@ -1,7 +1,11 @@
 #pragma once
+#include <cstdint>
+#include <sys/types.h>
+#include <combaseapi.h>
 
 typedef unsigned int    undefined4;
 typedef unsigned char    byte;
+typedef unsigned char MOD_const__T_RCHAR;
 
 struct bVector3 {
     float x;
@@ -37,6 +41,155 @@ struct FETreeDataNode {
     char field_0x2b;
 };
 DWORD FETreeDataNode_vftable;
+
+enum CAR_SLOT_ID {
+    CARSLOTID_BADGING_BUMPER_SET_FRONT = 0,
+    CARSLOTID_MODEL_FIRST = 0,
+    CARSLOTID_BADGING_BUMPER_SET_REAR = 1,
+    CARSLOTID_BADGING_FENDER_FRONT_LEFT = 2,
+    CARSLOTID_DECAL_MODEL_NUM = 2,
+    CARSLOTID_BADGING_FENDER_FRONT_RIGHT = 3,
+    CARSLOTID_BADGING_FENDER_REAR_LEFT = 4,
+    CARSLOTID_BADGING_FENDER_REAR_RIGHT = 5,
+    CARSLOTID_BADGING_TRUNK = 6,
+    CARSLOTID_BASE = 7,
+    CARSLOTID_BODY = 8,
+    CARSLOTID_BODY_DOORLINE = 9,
+    CARSLOTID_BRAKE_CALIPER_FRONT = 10,
+    CARSLOTID_BRAKE_CALIPER_REAR = 11,
+    CARSLOTID_BRAKE_ROTOR_FRONT = 12,
+    CARSLOTID_NONRENDER_NUM = 12,
+    CARSLOTID_BRAKE_ROTOR_REAR = 13,
+    CARSLOTID_BRAKELIGHT_GLASS_LEFT = 14,
+    CARSLOTID_BRAKELIGHT_GLASS_RIGHT = 15,
+    CARSLOTID_BRAKELIGHT_LEFT = 16,
+    CARSLOTID_BRAKELIGHT_RIGHT = 17,
+    CARSLOTID_BUMPER_FRONT = 18,
+    CARSLOTID_BUMPER_FRONT_EXTRA = 19,
+    CARSLOTID_BUMPER_REAR = 20,
+    CARSLOTID_BUMPER_REAR_EXTRA = 21,
+    CARSLOTID_CHASSIS = 22,
+    CARSLOTID_DAMAGE_BODY = 23,
+    CARSLOTID_DAMAGE_MODEL_FIRST = 23,
+    CARSLOTID_DAMAGE_BRAKELIGHT_LEFT = 24,
+    CARSLOTID_DAMAGE_BRAKELIGHT_RIGHT = 25,
+    CARSLOTID_DAMAGE_BUMPER_FRONT = 26,
+    CARSLOTID_DAMAGE_BUMPER_REAR = 27,
+    CARSLOTID_DAMAGE_DOOR_LEFT = 28,
+    CARSLOTID_DAMAGE_DOOR_REAR_LEFT = 29,
+    CARSLOTID_DAMAGE_DOOR_REAR_RIGHT = 30,
+    CARSLOTID_DAMAGE_DOOR_RIGHT = 31,
+    CARSLOTID_DAMAGE_FENDER_FRONT_LEFT = 32,
+    CARSLOTID_DAMAGE_FENDER_FRONT_RIGHT = 33,
+    CARSLOTID_DAMAGE_MODEL_NUM = 33,
+    CARSLOTID_DAMAGE_HEADLIGHT_LEFT = 34,
+    CARSLOTID_DAMAGE_HEADLIGHT_RIGHT = 35,
+    CARSLOTID_DAMAGE_HOOD = 36,
+    CARSLOTID_DAMAGE_SIDEMIRROR_LEFT = 37,
+    CARSLOTID_DAMAGE_SIDEMIRROR_RIGHT = 38,
+    CARSLOTID_DAMAGE_TRUNK = 39,
+    CARSLOTID_DAMAGE_TRUNK911 = 40,
+    CARSLOTID_DAMAGE_WIDEBODY = 41,
+    CARSLOTID_DAMAGE_WIDEBODY_BUMPER_FRONT = 42,
+    CARSLOTID_DAMAGE_WIDEBODY_BUMPER_REAR = 43,
+    CARSLOTID_DAMAGE_WIDEBODY_DOOR_LEFT = 44,
+    CARSLOTID_DAMAGE_WIDEBODY_DOOR_REAR_LEFT = 45,
+    CARSLOTID_DAMAGE_WIDEBODY_DOOR_REAR_RIGHT = 46,
+    CARSLOTID_DAMAGE_WIDEBODY_DOOR_RIGHT = 47,
+    CARSLOTID_DAMAGE_WIDEBODY_FENDER_FRONT_LEFT = 48,
+    CARSLOTID_DAMAGE_WIDEBODY_FENDER_FRONT_RIGHT = 49,
+    CARSLOTID_DAMAGE_WINDOW_FRONT = 50,
+    CARSLOTID_DAMAGE_WINDOW_FRONT_LEFT = 51,
+    CARSLOTID_DAMAGE_WINDOW_FRONT_RIGHT = 52,
+    CARSLOTID_DAMAGE_WINDOW_REAR = 53,
+    CARSLOTID_DAMAGE_WINDOW_REAR_LEFT = 54,
+    CARSLOTID_DAMAGE_MODEL_LAST = 55,
+    CARSLOTID_DAMAGE_WINDOW_REAR_RIGHT = 55,
+    CARSLOTID_DECAL_FRONT_WINDOW = 56,
+    CARSLOTID_DECAL_MODEL_FIRST = 56,
+    CARSLOTID_DECAL_MODEL_LAST = 57,
+    CARSLOTID_DECAL_REAR_WINDOW = 57,
+    CARSLOTID_DOOR_LEFT = 58,
+    CARSLOTID_DOOR_REAR_LEFT = 59,
+    CARSLOTID_DOOR_REAR_RIGHT = 60,
+    CARSLOTID_DOOR_RIGHT = 61,
+    CARSLOTID_DOORHANDLE_FRONT_LEFT = 62,
+    CARSLOTID_DOORHANDLE_FRONT_RIGHT = 63,
+    CARSLOTID_DOORHANDLE_REAR_LEFT = 64,
+    CARSLOTID_DOORHANDLE_REAR_RIGHT = 65,
+    CARSLOTID_DRIVER = 66,
+    CARSLOTID_ENGINE = 67,
+    CARSLOTID_EXHAUST = 68,
+    CARSLOTID_EXHAUST_TIPS_CENTER = 69,
+    CARSLOTID_EXHAUST_TIPS_LEFT = 70,
+    CARSLOTID_EXHAUST_TIPS_RIGHT = 71,
+    CARSLOTID_FENDER_FRONT_LEFT = 72,
+    CARSLOTID_FENDER_FRONT_RIGHT = 73,
+    CARSLOTID_HEADLIGHT_GLASS_LEFT = 74,
+    CARSLOTID_HEADLIGHT_GLASS_RIGHT = 75,
+    CARSLOTID_HEADLIGHT_LEFT = 76,
+    CARSLOTID_HEADLIGHT_RIGHT = 77,
+    CARSLOTID_HOOD = 78,
+    CARSLOTID_LICENSE_PLATE = 79,
+    CARSLOTID_LIGHTBAR = 80,
+    CARSLOTID_ROLL_CAGE = 81,
+    CARSLOTID_ROOF = 82,
+    CARSLOTID_ROOF_INSIDE = 83,
+    CARSLOTID_ROOFSCOOP = 84,
+    CARSLOTID_SEAT_LEFT = 85,
+    CARSLOTID_SEAT_RIGHT = 86,
+    CARSLOTID_SIDEMIRROR_LEFT = 87,
+    CARSLOTID_SIDEMIRROR_RIGHT = 88,
+    CARSLOTID_SKIRT_LEFT = 89,
+    CARSLOTID_SKIRT_RIGHT = 90,
+    CARSLOTID_SPOILER = 91,
+    CARSLOTID_STEERINGWHEEL = 92,
+    CARSLOTID_TRUNK = 93,
+    CARSLOTID_UNIVERSAL_SPOILER_BASE = 94,
+    CARSLOTID_WHEEL_FRONT = 95,
+    CARSLOTID_WHEEL_REAR = 96,
+    CARSLOTID_WINDOW_FRONT = 97,
+    CARSLOTID_WINDOW_FRONT_LEFT = 98,
+    CARSLOTID_WINDOW_FRONT_RIGHT = 99,
+    CARSLOTID_WINDOW_REAR = 100,
+    CARSLOTID_WINDOW_REAR_LEFT = 101,
+    CARSLOTID_MODEL_LAST = 102,
+    CARSLOTID_WINDOW_REAR_RIGHT = 102,
+    CARSLOTID_BRAKE_PACKAGE = 103,
+    CARSLOTID_FIRST_NONRENDER = 103,
+    CARSLOTID_MODEL_NUM = 103,
+    CARSLOTID_DRIVETRAIN_PACKAGE = 104,
+    CARSLOTID_ENGINE_PACKAGE = 105,
+    CARSLOTID_FORCED_INDUCTION_PACKAGE = 106,
+    CARSLOTID_INTERIOR = 107,
+    CARSLOTID_LIVERY = 108,
+    CARSLOTID_NITROUS_PACKAGE = 109,
+    CARSLOTID_SUSPENSION_PACKAGE = 110,
+    CARSLOTID_TIRE_FRONT = 111,
+    CARSLOTID_TIRE_PACKAGE = 112,
+    CARSLOTID_TIRE_REAR = 113,
+    CARSLOTID_LAST_NONRENDER = 114,
+    CARSLOTID_VECTORVINYL = 114,
+    CARSLOTID_NUM = 115,
+    CARSLOTID_INVALID = 255
+};
+
+enum ePaintSlot {
+    CUSTOM_PAINT_SLOT_BODY = 0,
+    CUSTOM_PAINT_SLOT_RIMS_FRONT = 1,
+    CUSTOM_PAINT_SLOT_RIMS_REAR = 2,
+    CUSTOM_PAINT_SLOT_ROLLCAGE = 3,
+    CUSTOM_PAINT_SLOT_BUMPER_FRONT = 4,
+    CUSTOM_PAINT_SLOT_BUMPER_REAR = 5,
+    CUSTOM_PAINT_SLOT_SIDESKIRT = 6,
+    CUSTOM_PAINT_SLOT_HOOD = 7,
+    CUSTOM_PAINT_SLOT_MIRROR = 8,
+    CUSTOM_PAINT_SLOT_SPOILER = 9,
+    CUSTOM_PAINT_SLOT_WINDOW_TINT = 10,
+    CUSTOM_PAINT_SLOT_ROOFSCOOP = 11,
+    MAX_CUSTOM_PAINT_SLOTS = 12,
+    INVALID_PAINT_SLOT = 13
+};
 
 enum CarPartID {
     BADGING_BUMPER_SET_FRONT = 0x00,
@@ -240,6 +393,7 @@ enum CarEffectPosition {
     CARFXPOS_LICENSE_PLATE_REAR = 27,
     NUM_CARFXPOS = 28
 };
+
 enum ePlayerSettingsCameras {
     NUM_CAMERAS_IN_OPTIONS = 5,
     PSC_BUMPER = 0,
@@ -257,7 +411,7 @@ enum ePlayerSettingsCameras {
 };
 
 struct FECarRecord {
-    DWORD id; //-1 uninitialized, 0-329 or preset
+    DWORD handle; //-1 uninitialized, 0-329 or preset
     DWORD frontend;
     DWORD pvehicle;
     DWORD preset; //can be zero if stock car or career
@@ -272,6 +426,145 @@ struct FECarRecord {
     uint8_t pad3;
     //DWORD field_0x14 = 0xAA00FFFF; //0xAAAAFFFF when empty, 0xAA00FFFF when used, 0xAA00[i][i] for career car i, i<256
     //DWORD field_0x18 = 0xAAAAAAAA; //ends with 00 or 01 when career car
+};
+
+struct PackedVinylColor {
+    byte swatch; /* //T_UCHAR */
+    byte saturation; /* //T_UCHAR */
+    byte brightness; /* //T_UCHAR */
+};
+
+struct FEPaintSV {
+    byte s; /* //T_UCHAR */
+    byte v; /* //T_UCHAR */
+};
+
+struct CarPaintRecordPacked {
+    int group; /* //T_UINT4 */
+    byte hue; /* //T_UCHAR */
+    float saturation; /* //T_REAL32 */
+    float variance; /* //T_REAL32 */
+};
+
+enum VinylsAttrib__VinylFinish {
+    VinylFinishMatte = 0,
+    VinylFinishGloss = 1,
+    VinylFinishChrome = 2
+};
+
+namespace VinylSystem {
+    struct VinylTransformPacked{
+    short translationX; /* //T_SHORT */
+    short translationY; /* //T_SHORT */
+    byte rotation; /* //T_UCHAR */
+    byte scaleX; /* //T_UCHAR */
+    byte scaleY; /* //T_UCHAR */
+    byte proportionalScale : 1;
+    byte shear : 7;
+    };
+}
+
+struct PackedVinylLayer {
+    short vinylPart; /* //T_SHORT */
+    struct VinylSystem::VinylTransformPacked transform; /* //VinylSystem::VinylTransformPacked */
+    struct PackedVinylColor colors[4]; /* // */
+};
+
+struct PackedDecalLayer {
+    short decalPart; /* //T_SHORT */
+    struct VinylSystem::VinylTransformPacked transform; /* //VinylSystem::VinylTransformPacked */
+    struct PackedVinylColor color; /* //PackedVinylColor */
+};
+
+enum BluePrintType {
+    BLUEPRINT_FIRST = 0,
+    BLUEPRINT_GRIP = 0,
+    BLUEPRINT_LAST = 0,
+    BLUEPRINT_DRIFT = 1,
+    BLUEPRINT_NUM = 1,
+    BLUEPRINT_DRAG = 2,
+    BLUEPRINT_SPEED_CHALLENGE = 3
+};
+
+enum KIT_TYPE {
+    KIT_TYPE_BASE = 0,
+    KIT_TYPE_STOCK = 1,
+    KIT_TYPE_AUTOSCULPT = 2,
+    KIT_TYPE_WIDEBODY = 3,
+    NUM_KIT_TYPE = 4
+};
+
+enum eCustomTuningType{
+    CTT_SETTING_1 = 0,
+    CTT_SETTING_2 = 1,
+    CTT_SETTING_3 = 2,
+    NUM_CUSTOM_TUNINGS = 3
+};
+
+enum eOnlineBlueprintType {
+    OBT_NONE = 0,
+    OBT_SHARED = 1,
+    OBT_DLC = 2
+};
+
+struct VehicleCustomizations {
+    static struct InstalledPart {
+        int part_key; /* //T_UINT4 */
+        int kit_num; /* //T_UINT4 */
+    };
+
+    short GUID[5]; /* // */
+    int creatorId; /* //T_UINT4 */
+    byte creatorName[32]; /* // */
+    int shareNumber; /* //T_UINT4 */
+    struct InstalledPart InstalledParts[115]; /* // */
+    byte customPaintsValid[12]; /* // */
+    struct CarPaintRecordPacked customPaints[12]; /* // */
+    byte partBaseMaterials[12]; /* // */
+    enum BluePrintType bluePrintType; /* //BluePrintType */
+    enum KIT_TYPE kitType; /* //KIT_TYPE */
+    int kitNum; /* //T_UINT4 */
+    float RideHeight; /* //T_REAL32 */
+    struct PackedVinylLayer VinylLayers[20]; /* // */
+    int VinylMirrorBits; /* //T_INT4 */
+    int NumVinylLayers; /* //T_INT4 */
+    struct PackedDecalLayer DecalLayers[20]; /* // */
+    int DecalMirrorBits; /* //T_INT4 */
+    int NumDecalLayers; /* //T_INT4 */
+    int LiveryID; /* //T_INT4 */
+    byte MorphValues[40][11]; /* // */
+    float PhysicsTuning[32]; /* // */
+    int Type; /* //T_INT4 */
+    enum VinylsAttrib__VinylFinish vinylFinish; /* //VinylsAttrib::VinylFinish */
+    int PresetRide; /* //T_UINT4 */
+    enum CAR_SLOT_ID RemovedParts[4]; /* // */
+};
+
+struct FEKitInfo {
+    enum KIT_TYPE installedType; /* //KIT_TYPE */
+    int installedKitNum; /* //T_UINT4 */
+    int inventory[4]; /* // */
+};
+
+namespace Physics {
+    struct Tunings {
+        float Value[7]; /* // */
+    };
+}
+
+struct FECustomizationRecord {
+    short FirstCarPartRecordIndex; /* //T_USHORT */
+    short FirstVinylRecordIndex; /* //T_USHORT */
+    struct VehicleCustomizations mBluePrint; /* //VehicleCustomizations */
+    struct FEKitInfo mBodykitInfo; /* //FEKitInfo */
+    struct Physics::Tunings Tunings[3]; /* // */
+    enum eCustomTuningType ActiveTuning; /* //eCustomTuningType */
+    int Preset; /* //T_INT4 */
+    byte Handle; /* //T_UCHAR */
+    int mType; /* //T_INT4 */
+    struct FEPaintSV mPaint[12]; /* // */
+    enum eOnlineBlueprintType mOnlineType; /* //eOnlineBlueprintType */
+    byte mBlueprintTier; /* //T_UCHAR */
 };
 
 struct DALInterface; //i hate c++ so much
@@ -499,6 +792,139 @@ struct SunAndSky {
     float mSunOcclusionResponseRate; /* //T_REAL32 */
 };
 
+
+struct VariableArray {
+    float* mArray; /* //T_32PREAL32 */
+    int mLength; /* //T_UINT4 */
+};
+
+struct Curve {
+    float xMin; /* //T_REAL32 */
+    float xMax; /* //T_REAL32 */
+    float yMin; /* //T_REAL32 */
+    float yMax; /* //T_REAL32 */
+    float graphScale; /* //T_REAL32 */
+    struct VariableArray X; /* //VariableArray */
+    struct VariableArray Y; /* //VariableArray */
+    struct VariableArray Y2; /* //VariableArray */
+    byte allocatedMemory; /* //T_BOOL08 */
+};
+
+struct AxlePairCurve {
+    struct Curve Front; /* //Curve */
+    struct Curve Rear; /* //Curve */
+};
+
+struct FEPartData {
+    DWORD HAL_ID; /* //type_bStringHash */
+    DWORD CF_HAL_ID; /* //type_bStringHash */
+    int price; /* //T_INT4 */
+    byte showroom_unlock; /* //T_UCHAR */
+    int tier1_price; /* //T_INT4 */
+    int tier2_price; /* //T_INT4 */
+    int tier3_price; /* //T_INT4 */
+    int tier4_price; /* //T_INT4 */
+    byte tier; /* //T_UCHAR */
+    byte tier_1_showroom_unlock; /* //T_UCHAR */
+    byte tier_2_showroom_unlock; /* //T_UCHAR */
+    byte tier_3_showroom_unlock; /* //T_UCHAR */
+    byte tier_4_showroom_unlock; /* //T_UCHAR */
+    DWORD BrandHALId; /* //type_bStringHash */
+    DWORD LogoTextureId; /* //type_bStringHash */
+    DWORD DetailHash; /* //type_bStringHash */
+    struct FEPartDetail* PartDetails; /* //FEPartDetail* */
+    MOD_const__T_RCHAR* OfferID; /* //MOD_const__T_RCHAR* */
+    byte IsOnlineLockable; /* //T_BOOL08 */
+};
+
+struct FEPartDetail {
+    DWORD Logo; /* //type_bStringHash */
+    DWORD Name; /* //type_bStringHash */
+};
+
+enum eLiveryID {
+    LIVERYID_COP_CAR_MID_05_01 = 0,
+    LIVERYID_COP_CAR_MUS = 1,
+    LIVERYID_COP_CAR_GTR = 2,
+    LIVERYID_COP_CAR_POR_911 = 3,
+    LIVERYID_COP_SUV = 4,
+    LIVERYID_BOSS_CARMEN = 5,
+    LIVERYID_BOSS_CHASE = 6,
+    LIVERYID_BOSS_ISF = 7,
+    LIVERYID_BOSS_NICKEL = 8,
+    LIVERYID_BOSS_ROSE = 9,
+    LIVERYID_BOSS_ZACK = 10,
+    LIVERYID_BOSS_INTRO = 11,
+    LIVERYID_MEGANE = 12,
+    LIVERYID_BOSS_GMAC = 13,
+    LIVERYID_TERLINGUA = 14,
+    LIVERYID_BOSS_HECTOR = 15,
+    LIVERYID_DCAST_GT2 = 16,
+    LIVERYID_DCAST_R8 = 17,
+    LIVERYID_DCAST_CAMARO = 18,
+    LIVERYID_DCAST_CHARGER = 19,
+    LIVERYID_DCAST_VIPER = 20,
+    LIVERYID_DCAST_MUSTANG = 21,
+    LIVERYID_DCAST_MURCIELAGO = 22,
+    LIVERYID_DCAST_ISF = 23,
+    LIVERYID_DCAST_MPS3 = 24,
+    LIVERYID_DCAST_GTO = 25,
+    LIVERYID_DCAST_GTR = 26,
+    LIVERYID_DCAST_911_TURBO = 27,
+    LIVERYID_DCAST_GOLF = 28,
+    LIVERYID_DCAST_CAMARO2 = 29,
+    LIVERYID_BOSS_ROSES = 30,
+    LIVERYID_MAX = 31,
+    LIVERYID_NONE = 255
+};
+
+namespace DALVehicleCommands {
+    enum DriveTrain {
+        DRIVETRAIN_FWD = 0,
+        DRIVETRAIN_RWD = 1,
+        DRIVETRAIN_AWD = 2
+    };
+
+    enum RaceMode {
+        MODE_GRIP = 0,
+        MODE_DRIFT = 1,
+        MODE_DRAG = 2,
+        MODE_SPEED = 3,
+        MODE_MAX = 4
+    };
+
+    struct CarInfo {
+        int carNameHash; /* //T_UINT4 */
+        int carManuLogoHash; /* //T_UINT4 */
+        int carLogoHash_pvehicleKey; /* //T_UINT4 */
+        int carCost; /* //T_UINT4 */
+        int region; /* //T_UINT4 */
+        enum DriveTrain drivetrain; /* //DALVehicleCommands::DriveTrain */
+        int handle; /* //T_UINT4 */
+        enum RaceMode mode; /* //DALVehicleCommands::RaceMode */
+        float damage; /* //T_REAL32 */
+    };
+}
+
+namespace GRace {
+    enum Tier {
+        kRaceTier_None = 0,
+        kRaceTier_1 = 1,
+        kRaceTier_2 = 2,
+        kRaceTier_3 = 3,
+        kRaceTier_4 = 4,
+        kRaceTier_NumTiers = 5
+    };
+}
+
+namespace FE {
+    struct PAINTSLOTINFO {
+        enum CAR_SLOT_ID id; /* //CAR_SLOT_ID */
+        enum ePaintSlot paintRegion; /* //ePaintSlot */
+        const char* name;
+    };
+}
+
 namespace Attrib {
 
     struct Array {
@@ -511,12 +937,24 @@ namespace Attrib {
     struct Node {
         int mKey; /* //T_UINT4 */
         int mPtr; /* //T_32PVOID */
-        struct Array* mArray; /* //Attrib::Array* */
-        int mValue; /* //T_UINT4 */
-        int mOffset; /* //T_UINT4 */
+        //struct Array* mArray; /* //Attrib::Array* */
+        //int mValue; /* //T_UINT4 */
+        //int mOffset; /* //T_UINT4 */
         short mTypeIndex; /* //T_USHORT */
         byte mMax; /* //T_UCHAR */
         byte mFlags; /* //T_UCHAR */
+
+        static enum Flags {
+            NotAnArray = 2,
+			InLayout = 0x10,
+            Static = 0x20,
+            DirectPointer = 0x40
+        };
+    };
+
+    struct StringKey {
+        int mHash32; /* //T_UINT4 */
+        MOD_const__T_RCHAR* mString; /* //MOD_const__T_RCHAR* */
     };
 
     struct HashMap {
@@ -553,6 +991,15 @@ namespace Attrib {
     };
 
     struct Definition {
+        static enum Flags {
+            kArray = 1,
+            kInLayout = 2,
+            kIsBound = 4,
+            kIsNotSearchable = 8,
+            kIsStatic = 16,
+            kHasHandler = 32
+        };
+
         int mKey; /* //T_UINT4 */
         int mType; /* //T_UINT4 */
         short mOffset; /* //T_USHORT */
@@ -567,12 +1014,47 @@ namespace Attrib {
     struct Class {
         int mKey; /* //T_UINT4 */
         struct ClassPrivate* mPrivates; /* //Attrib::ClassPrivate* */
+
+        static Attrib::Definition* (__cdecl* GetDefinition)(Attrib::Definition* defStart, Attrib::Definition* defEnd, Attrib::Definition* match);
+        //= (Attrib::Definition * (__cdecl*)(Attrib::Definition * defStart, Attrib::Definition * defEnd, Attrib::Definition * match))0x0;
     };
 
+    struct ClassTable__Node {
+        int mKey; /* //T_UINT4 */
+        struct Class* mPtr; /* //Attrib::Class* */
+        int mMax; /* //T_UINT4 */
+    };
+
+    struct Collection;
+    //actually not in this namespace
+    struct VecHashMap_uint_Collection_TablePolicy_1_96 {
+        static struct Node {
+            int mKey; /* //T_UINT4 */
+            struct Attrib::Collection* mPtr; /* //Attrib::Collection* */
+            int mMax; /* //T_UINT4 */
+        };
+
+        struct Node* mTable; /* //VecHashMap<unsigned int,Attrib::Collection,Attrib::Class::TablePolicy,1,96>::Node* */
+        short mTableSize; /* //T_USHORT */
+        short mNumEntries; /* //T_USHORT */
+        short mFixedAlloc; /* //T_USHORT */
+        short mWorstCollision; /* //T_USHORT */
+
+    };
+
+    namespace Database {
+        //static Class* (__fastcall* GetNextClass)(DWORD Database, DWORD edx, DWORD index);
+    }
+
     struct ClassPrivate {
+        static struct CollectionHashMap {
+            struct VecHashMap_uint_Collection_TablePolicy_1_96 __inherit_0; /* //VecHashMap<unsigned int,Attrib::Collection,Attrib::Class::TablePolicy,1,96> */
+        };
+
+
         struct Class __inherit_0; /* //Attrib::Class */
         struct HashMap mLayoutTable; /* //Attrib::HashMap */
-        void* mCollections; /* //Attrib::ClassPrivate::CollectionHashMap */
+        struct Attrib::ClassPrivate::CollectionHashMap mCollections; /* //Attrib::ClassPrivate::CollectionHashMap */
         short mLayoutSize; /* //T_USHORT */
         short mNumDefinitions; /* //T_USHORT */
         struct Definition* mDefinitions; /* //Attrib::Definition* */
@@ -587,24 +1069,159 @@ namespace Attrib {
         struct Class* mClass; /* //Attrib::Class* */
         int mLayout; /* //T_32PVOID */
         struct Vault* mSource; /* //Attrib::Vault* */
+
+        static int(__fastcall* GetData)(Collection* this_, DWORD edx, DWORD key, DWORD index);
+        static bool(__fastcall* Contains)(Collection* this_, DWORD edx, DWORD key);
+        static Node* (__fastcall* GetNode)(Collection* this_, DWORD edx, DWORD key, DWORD* keyptr);
+        static bool(__fastcall* AddAttribute)(Collection* this_, DWORD edx, DWORD key, DWORD arraySize);
+        static bool(__fastcall* RemoveAttribute)(Collection* this_, DWORD edx, DWORD key);
+        static struct Attribute* (__fastcall* Get)(Collection* this_, DWORD edx, struct Attribute* storage, struct Instance* inst, DWORD key);
     };
 
-    struct _Instance {
+    struct RefSpec {
+        int mClassKey; /* //T_UINT4 */
+        int mCollectionKey; /* //T_UINT4 */
+        Collection* mCollectionPtr; /* //MOD_const__Attrib::Collection* */
+    };
+
+    //struct _baseLayoutStruct {};
+
+    interface InstanceBase {
+    };
+
+    struct Instance : InstanceBase {
         struct Collection* mCollection; /* //MOD_const__Attrib::Collection* */
-        int mLayoutPtr; /* //T_32PVOID */
+        void* mLayoutPtr; /* //T_32PVOID */
         int mMsgPort; /* //T_UINT4 */
         int mFlags; /* //T_UINT4 */
+
+        static void* GetAttributePointerFromString(InstanceBase* this_, const char* key, DWORD stuff);
+        static void* (__fastcall* GetAttributePointer)(InstanceBase* this_, DWORD edx, DWORD key, DWORD stuff);
+
+        static void(__fastcall* constructor)(InstanceBase* this_, DWORD edx, Collection* node, DWORD stuff);
+        static void(__fastcall* destructor)(InstanceBase* this_);
+
+        static bool(__fastcall* Contains)(InstanceBase* this_, DWORD edx, DWORD key);
     };
 
-    namespace Instance {
-        void* GetAttributePointerFromString(_Instance* this_, const char* key, DWORD stuff);
-        auto GetAttributePointer = (void* (__fastcall*)(_Instance * this_, DWORD edx, DWORD key, DWORD stuff))0x0;
-    }
+    struct Attribute {
+        Instance* mInstance; /* //MOD_const__Attrib::Instance* */
+        Collection* mCollection; /* //MOD_const__Attrib::Collection* */
+        struct Attrib::Node* mInternal; /* //Attrib::Node* */
+        int mDataPointer; /* //T_32PVOID */
+
+        static bool(__fastcall* SetLength)(Attribute* this_, DWORD edx, DWORD length);
+        static int(__fastcall* GetLength)(Attribute* this_);
+    };
+
+    //Instance::GetAttributePointer = (void* (__fastcall *)(InstanceBase * this_, DWORD edx, DWORD key, DWORD stuff))0x0;
+
+    //typedef Instance<_baseLayoutStruct> _Instance;
+
+    auto AddAttribute = (bool(__fastcall*)(Collection * this_, DWORD edx, DWORD key, DWORD arraySizeMaybe))0x0;
 
     namespace Gen {
-        auto zone_visual_style__constructor = (void(__fastcall*)(_Instance * this_, DWORD edx, DWORD node, DWORD stuff))0x0;
+
+
+
+        //typedef Instance<frontend::_LayoutStruct> frontend;
+        struct frontend : InstanceBase {
+            static struct _LayoutStruct {
+                MOD_const__T_RCHAR* CollectionName; /* //MOD_const__T_RCHAR* */
+                int region; /* //T_UINT4 */
+                int manufacturer; /* //T_UINT4 */
+                byte IsCustomizable; /* //T_BOOL08 */
+                int Cost; /* //T_INT4 */
+                byte UnlockedAt; /* //T_UCHAR */
+            };
+
+            struct Collection* mCollection; /* //MOD_const__Attrib::Collection* */
+            _LayoutStruct* mLayoutPtr; /* //T_32PVOID */
+            int mMsgPort; /* //T_UINT4 */
+            int mFlags; /* //T_UINT4 */
+
+            static void(__fastcall* constructor)(frontend *this_, DWORD unaff, Attrib::RefSpec*, DWORD);
+        };
+
+
+        struct pvehicle : InstanceBase {
+            static struct _LayoutStruct {
+                struct Attrib::StringKey MODEL; /* //Attrib::StringKey */
+                struct Attrib::RefSpec frontend; /* //Attrib::RefSpec */
+                MOD_const__T_RCHAR* DefaultPresetRide; /* //MOD_const__T_RCHAR* */
+                MOD_const__T_RCHAR* CollectionName; /* //MOD_const__T_RCHAR* */
+                byte RandomOpponent; /* //T_BOOL08 */
+                enum GRace::Tier RacingTier; /* //GRace::Tier */
+                byte isRateable; /* //T_BOOL08 */
+            };
+
+            struct Collection* mCollection; /* //MOD_const__Attrib::Collection* */
+            _LayoutStruct* mLayoutPtr; /* //T_32PVOID */
+            int mMsgPort; /* //T_UINT4 */
+            int mFlags; /* //T_UINT4 */
+
+            static void(__fastcall* constructor)(pvehicle * this_, DWORD unaff, DWORD, DWORD);
+        };
+        //typedef Instance<pvehicle::_LayoutStruct> _pvehicle;
+        //struct _pvehicle : _Instance<pvehicle::_LayoutStruct> {};
+
+        struct zone_visual_style : InstanceBase {
+            static struct _LayoutStruct {
+                float SunLatitude;
+                float SkyDomeRotation;
+            };
+
+            struct Collection* mCollection; /* //MOD_const__Attrib::Collection* */
+            _LayoutStruct* mLayoutPtr; /* //T_32PVOID */
+            int mMsgPort; /* //T_UINT4 */
+            int mFlags; /* //T_UINT4 */
+
+            static void(__fastcall* constructor)(zone_visual_style *this_, DWORD edx, DWORD node, DWORD stuff);
+        };
+        //typedef Instance<zone_visual_style::_LayoutStruct> _zone_visual_style;
+
+        struct presetride : InstanceBase {
+            static struct _LayoutStruct {
+                MOD_const__T_RCHAR* PresetName; /* //MOD_const__T_RCHAR* */
+                MOD_const__T_RCHAR* CollectionName; /* //MOD_const__T_RCHAR* */
+                float RideHeight; /* //T_REAL32 */
+                int PresetCar; /* //type_bStringHash */
+                enum eLiveryID Livery; /* //eLiveryID */
+                enum KIT_TYPE KitType; /* //KIT_TYPE */
+                int KitNumber; /* //T_UINT4 */
+                enum BluePrintType BluePrint; /* //BluePrintType */
+                byte Tier; /* //T_UCHAR */
+            };
+            Collection* mCollection; /* //Attrib::Instance */
+            struct _LayoutStruct* mLayoutPtr; /* //T_32PVOID */
+            int mMsgPort; /* //T_UINT4 */
+            int mFlags; /* //T_UINT4 */
+
+            static void(__fastcall* constructor)(presetride* this_, DWORD unaff, DWORD, DWORD);
+        };
+
+		struct generic : InstanceBase {
+			struct Collection* mCollection; /* //MOD_const__Attrib::Collection* */
+			void* mLayoutPtr; /* //T_32PVOID */
+			int mMsgPort; /* //T_UINT4 */
+			int mFlags; /* //T_UINT4 */
+
+			static void constructor(InstanceBase* this_, DWORD clazz, DWORD node);
+		};
     }
 
     auto DefaultDataArea = (void* (__cdecl*)(DWORD length))0x0;
+    auto FindCollection = (Collection* (__cdecl*)(DWORD classKey, DWORD collectionKey, char* collectionName))0x0;
 
 }
+
+struct DBCarPart {
+    bool isValid;
+    unsigned char CarTypeNameHashIndex;
+    unsigned short AttributeTableOffset;
+    Attrib::Collection* partAttributes;
+    unsigned short kitNum;
+    unsigned short materialFlags;
+    unsigned char pad;
+};
+

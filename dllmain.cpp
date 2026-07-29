@@ -25,9 +25,13 @@ C:\Program Files (x86)\EA Games\Need for Speed Undercover\scripts\UndercoverExpo
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx9.h"
-#include "nfs_structs.h"
+//#include "nfs_structs.h"
 #include <chrono>
-
+#include <map>
+#include "imgui/imgui_internal.h"
+#include "imgui/implot.h"
+#include "AttribEditor.h"
+#include "MiscGameFuncs.h"
 
 using namespace std;
 
@@ -37,42 +41,37 @@ static uint32_t readInt(std::ifstream& input) {
     return a;
 }
 
+//declare functions from nfs_structs.h
+void(__fastcall* Attrib::Instance::constructor)(Attrib::InstanceBase* this_, DWORD edx, Attrib::Collection* node, DWORD stuff) = nullptr;
+void(__fastcall* Attrib::Instance::destructor)(Attrib::InstanceBase* this_) = nullptr;
+void* (__fastcall* Attrib::Instance::GetAttributePointer)(Attrib::InstanceBase* this_, DWORD edx, DWORD key, DWORD stuff) = nullptr;
+bool(__fastcall* Attrib::Instance::Contains)(Attrib::InstanceBase* this_, DWORD edx, DWORD key) = nullptr;
+Attrib::Definition* (__cdecl* Attrib::Class::GetDefinition)(Attrib::Definition* defStart, Attrib::Definition* defEnd, Attrib::Definition* match) = nullptr;
+void(__fastcall* Attrib::Gen::frontend::constructor)(Attrib::Gen::frontend* this_, DWORD unaff, Attrib::RefSpec*, DWORD) = nullptr;
+void(__fastcall* Attrib::Gen::pvehicle::constructor)(Attrib::Gen::pvehicle* this_, DWORD unaff, DWORD, DWORD);
+void(__fastcall* Attrib::Gen::zone_visual_style::constructor)(Attrib::Gen::zone_visual_style* this_, DWORD edx, DWORD node, DWORD stuff);
+void(__fastcall* Attrib::Gen::presetride::constructor)(Attrib::Gen::presetride* this_, DWORD unaff, DWORD, DWORD);
+int(__fastcall* Attrib::Collection::GetData)(Attrib::Collection* this_, DWORD edx, DWORD key, DWORD index); //actually void* but well
+Attrib::Node*(__fastcall* Attrib::Collection::GetNode)(Attrib::Collection* this_, DWORD edx, DWORD key, DWORD* keyptr);
+bool(__fastcall* Attrib::Collection::Contains)(Attrib::Collection* this_, DWORD edx, DWORD key);
+bool(__fastcall* Attrib::Collection::AddAttribute)(Attrib::Collection* this_, DWORD edx, DWORD key, DWORD arraySize);
+bool(__fastcall* Attrib::Collection::RemoveAttribute)(Attrib::Collection* this_, DWORD edx, DWORD key);
+bool(__fastcall* Attrib::Attribute::SetLength)(Attrib::Attribute* this_, DWORD edx, DWORD length);
+int(__fastcall* Attrib::Attribute::GetLength)(Attrib::Attribute* this_);
+Attrib::Attribute* (__fastcall* Attrib::Collection::Get)(Attrib::Collection* this_, DWORD edx, Attrib::Attribute* storage, Attrib::Instance* inst, DWORD key);
+
+//Attrib::Class* (__fastcall* Attrib::Database::GetNextClass)(DWORD Database, DWORD edx, DWORD index);
+
+void Attrib::Gen::generic::constructor(Attrib::InstanceBase* this_, DWORD clazz, DWORD node) {
+    auto inst = (Attrib::Instance*)this_;
+    Attrib::Instance::constructor(inst, 0, Attrib::FindCollection(clazz, node, NULL), NULL);
+    if (inst->mLayoutPtr == NULL){
+		inst->mLayoutPtr = Attrib::DefaultDataArea(0); //0 should be fineeeee
+    }
+}
 
 
-//useful shit
-auto getVltHash = (uint32_t(__cdecl*)(char* toHash)) 0x0;
-auto getBinHash = (uint32_t(__cdecl*)(char* toHash)) 0x0;
-auto MemoryAlloc = (DWORD(__cdecl*)(DWORD size, const char* name, DWORD baseAddress)) 0x0;
-auto getTexture = (char* (__cdecl*)(uint32_t textureHash, int param_2, int param_3)) 0x0;
 
-DWORD* MemBlock_Global;
-DWORD* MemBlock_FE;
-DWORD* MemBlock_Cars;
-
-const DWORD zero = 0x00000000;
-
-
-int* GameFlow;
-int* Renderer;
-DWORD* FEScreenManager;
-
-
-DWORD* UserProfile_Player1;
-DWORD* FECarHeaven;
-//DWORD CurrentFECarPTR_012ac35c = 0x012ac35c;
-DWORD* FEOptionsStateManager;
-DWORD* FEPerformanceTuning;
-DWORD* FEVisualPaint;
-DWORD* FEVinylPaintScreen;
-DWORD* FEAutosculptScreen;
-
-DWORD* DebugVehicleSelection;
-
-int* timer_world;
-
-SunAndSky* theSunAndSky;
-
-DWORD CURRENT_GAME_VERSION;
 //void* hwnd = *(void**)0x01304e98;
 //IDirect3DDevice9* g_pd3dDevice = *(IDirect3DDevice9**)0x013b3190;
 
@@ -81,14 +80,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 std::random_device rd;
 std::mt19937 gen(rd());
-
-
-auto FETreeDataNode_constructor = (FETreeDataNode * (__fastcall*)(FETreeDataNode * this_, DWORD unaff, DWORD, char*, DWORD, DWORD)) 0x00548210;
-auto FE_getFeElement = (DWORD(__fastcall*)(DWORD this_, DWORD unaff, DWORD)) 0x005391d0;
-auto AddToTree = (void* (__fastcall*)(DWORD this_, DWORD unaff, LinkedNode*, DWORD)) 0x005563c0;
-auto FUN_00553aa0 = (void(__fastcall*)(LinkedNode * this_)) 0x00553aa0;
-auto FUN_getLinkedListLength_004a76f0 = (DWORD(__fastcall*)(LinkedNode * this_, DWORD unaff, DWORD)) 0x004a76f0;
-
 
 
 
@@ -108,7 +99,7 @@ namespace Settings{
     static bool FixTruckTrailers = true;
     static bool verbose = true;
     static bool KitRideHeight = true;
-    static int lastGoodGlobalB = 1242129289;
+    static time_t lastGoodGlobalB = 1242129289;
 
     static int IndexBufferSize = 0x50000;
     static int CarsPoolSize = 0x4e20000;
@@ -138,18 +129,30 @@ namespace Settings{
     static bool HeadlightShatterFix = true;
     static bool EffectsEnhancements = true;
 
+	static bool ReadCarListFromAttrib = true;
+    static bool RemoveStockCarRecords = false;
+    static bool Remove20CarLimit = true;
+
     static bool tests = false;
 
     static void getConfigSetting(string setting, string line, int* ret) {
         if (line.find(setting + " ") == 0) {
             int value = line.find("=") + 1;
             while (line.at(value) == ' ' || line.at(value) == '\t') value++;
-            if (line.at(value) == '0' && line.at(value + 1) == 'x') {
+            if (line.at(value) == '0' && line.at(value + 1) == 'x') 
                 sscanf_s(line.substr(value, std::string::npos).c_str(), "%x", ret);
-            }
-            else {
-                sscanf_s(line.substr(value, std::string::npos).c_str(), "%d", ret);
-            }
+            else sscanf_s(line.substr(value, std::string::npos).c_str(), "%d", ret);
+            //std::cout << setting << " = " << *ret << "\n";
+        }
+    }
+
+    static void getConfigSetting(string setting, string line, time_t* ret) {
+        if (line.find(setting + " ") == 0) {
+            int value = line.find("=") + 1;
+            while (line.at(value) == ' ' || line.at(value) == '\t') value++;
+            if (line.at(value) == '0' && line.at(value + 1) == 'x')
+                sscanf_s(line.substr(value, std::string::npos).c_str(), "%x", ret);
+            else sscanf_s(line.substr(value, std::string::npos).c_str(), "%d", ret);
             //std::cout << setting << " = " << *ret << "\n";
         }
     }
@@ -186,14 +189,18 @@ namespace Settings{
 
             if (i != start) {
                 string toHash = line.substr(start, i - start);
-                //cout << "String to hash : " << toHash << "\n";
-                //tempNames->push_back(toHash);
-
-                if (getVltHash != (uint32_t(__cdecl*)(char* toHash))0x0) {
-                    *ret = getVltHash((char*)toHash.c_str());
+                if (toHash.length() < 3) {
+                    *ret = 0;
                 }
-                else std::cout << "Undercover Exposed: Can't access the Vlt hasher!";
-
+                else {
+                    if (toHash[0] == '0' && toHash[1] == 'x') {
+                        sscanf_s(toHash.c_str(), "%x", ret);
+                    } else
+                    if (getVltHash != (uint32_t(__cdecl*)(char* toHash))0x0) {
+                        *ret = getVltHash((char*)toHash.c_str());
+                    }
+                    else std::cout << "Undercover Exposed: Can't access the Vlt hasher!";
+                }
             }
         }
     }
@@ -317,7 +324,7 @@ namespace Settings{
         if (stat("UndercoverExposed.ini", &confEx) == -1) {
             std::ofstream configFile("UndercoverExposed.ini");
             configFile << R"([Fixes]
-Verbose = 1                             //includes additional debugging information
+Verbose = 1                             //includes additional debugging information and logs detected errors in GameErrors.log
 CrashFixes = 1                          //fixes various crashes, some specific to Exposed (removes intentional crashes, removes breakpoints, fixes the starter car crash in 1.18, prevents a crash when CreateTexture fails, removes calls to CarLoader::PrintMemoryUsage a seemingly broken function, prevents the crash for models over max polycount, enforces memory pool integrity checks)
 IndexBufferSize = 0xA0000               //increases IndexBufferSize, vanilla = 0x50000
 CarsPoolSize = 0x8000000                //increases Cars pool size, vanilla = 0x4e20000
@@ -328,7 +335,12 @@ LastGoodGlobalB = 1242129289
 KitRideHeightEnabled = 1                //enables per-kit ride height on some cars
 SkipBootupChecks = 1                    //skips some unnecessary bootup checks
 EnableAllCameras = 1                    //allows to pick any of the nine vanilla cameras: POV_BUMPER/HOOD, POV_OUTSIDE_CLOSE/FAR/DRIFT/STAGING/PAUSE/SLOTCAR/TUNING
-EnableOverlay = 1                       //enables an in-game overlay
+EnableOverlay = 0                       //enables an in-game overlay - most features are only in TESTS
+
+[Features: Car list]
+ReadCarListFromAttrib = 1               //forces the game to read the car list from Attrib data instead of the save, removing the need to make a new save for each new car
+RemoveStockCarRecords = 1               //removes stock cars from new saves when the above option is selected
+Remove20CarLimit = 1                    //removes the 20 car limit in Career and My Cars - the actual limit is 70 total!
 
 [Features: Slider enhancements]
 SliderEnhancements = 1                  //fixes Autosculpt sliders speed and adds speed modifiers with Ctrl and Shift
@@ -438,6 +450,10 @@ AftermarketMenuOption = 0x5D, Trunk
 
                 getConfigSetting("EnableAllCameras", line, &EnableAllCameras);
                 getConfigSetting("EnableOverlay", line, &EnableOverlay);
+
+                getConfigSetting("ReadCarListFromAttrib", line, &ReadCarListFromAttrib);
+                getConfigSetting("RemoveStockCarRecords", line, &RemoveStockCarRecords);
+                getConfigSetting("Remove20CarLimit", line, &Remove20CarLimit);
 
                 getConfigSetting("TESTS", line, &tests);
             }
@@ -695,8 +711,8 @@ namespace DayNight {
 }
 
 namespace Verbose {
-    static const char* fatalerr = "Memory Framework : Fatal error";
-    void* __alloca_probe = (void*)0x0087b250;
+    static const char* fatalerr = "Memory Framework: Fatal error";
+    /*void* __alloca_probe = (void*)0x0087b250;
     __declspec(naked) void DebugPrintReplacement() { __asm {
         MOV        EAX, 0x1000
         CALL       __alloca_probe  //undefined __alloca_probe(void)
@@ -722,7 +738,45 @@ namespace Verbose {
 
         ADD        ESP, 0x1000
         RET
-    }}
+    }}*/
+
+    auto bReleasePrintf = (void (__cdecl*)(char* _format, DWORD * arg1, DWORD * arg2, DWORD * arg3, DWORD * arg4, DWORD * arg5, DWORD * arg6, DWORD * arg7, DWORD * arg8)) 0x0;
+
+    void WriteLog(char* error) {
+        std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        auto time_buf = new char[26];
+        ctime_s(time_buf, 26, &time);
+
+        printf("\a");
+
+        std::ofstream log;
+        log.open("GameErrors.log", std::ios_base::app | std::ios_base::out);
+        log << "Error detected on " << time_buf;
+        log << error << "\n\n";
+        log.flush();
+    }
+
+    void WriteLog(char* _format, DWORD* arg1, DWORD* arg2, DWORD* arg3, DWORD* arg4, DWORD* arg5, DWORD* arg6, DWORD* arg7, DWORD* arg8) {
+        char error[4096];
+        snprintf(error, sizeof(error), _format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        WriteLog(error);
+    }
+
+    void __cdecl DebugPrintReplacement(char* _format, DWORD* arg1, DWORD* arg2, DWORD* arg3, DWORD* arg4, DWORD* arg5, DWORD* arg6, DWORD* arg7, DWORD* arg8) {
+        char error[4096];
+        snprintf(error, sizeof(error), _format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        OutputDebugStringA(error);
+        MessageBoxA(NULL, error, fatalerr, 0x00000010L);
+        WriteLog(error);
+    }
+
+    void __cdecl bReleasePrintf_ERR(char* _format, DWORD* arg1, DWORD* arg2, DWORD* arg3, DWORD* arg4, DWORD* arg5, DWORD* arg6, DWORD* arg7, DWORD* arg8) {
+        bReleasePrintf(_format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        char error[4096];
+        snprintf(error, sizeof(error), _format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        WriteLog(error);
+        MessageBoxA(NULL, error, fatalerr, 0x00000010L);
+    }
 }
 
 namespace KitRideHeight {
@@ -1898,40 +1952,8 @@ namespace Headlights {
 }
 
 namespace CrashFixes {
-    bool doFirstCarCrashFix = false;
-
-    // FROM EXTRA OPTIONS
-    DWORD _PlayerIPlayer = 0x012faa80;
-    DWORD _PlayerPVehicle = 0x012fa478;
-    int* NumCurrentIVehicleElements = (int*)0x012fa474;
-    static DWORD GetPlayerPVehicle()
-    {
-        DWORD* ISimableFromIPlayer, * ISimableFromIVehicle, * PlayerPVehicle;
-
-        DWORD* PlayerIPlayer = *(DWORD**)_PlayerIPlayer; // Player 1
-
-        for (int i = 0; i < *NumCurrentIVehicleElements; i++)
-        {
-            PlayerPVehicle = *(DWORD**)(_PlayerPVehicle + i * 4);
-
-            if (PlayerIPlayer) ISimableFromIPlayer = (*(DWORD * (__thiscall**)(DWORD*))(PlayerIPlayer[0] + 0x4))(PlayerIPlayer); // RecordablePlayer::GetSimable
-            else ISimableFromIPlayer = 0;
-            if (PlayerPVehicle) ISimableFromIVehicle = (*(DWORD * (__thiscall**)(DWORD*))(PlayerPVehicle[0] + 0x4))(PlayerPVehicle); // PVehicle::GetSimable
-            else ISimableFromIVehicle = 0;
-
-            if (ISimableFromIPlayer && ISimableFromIVehicle && (ISimableFromIPlayer == ISimableFromIVehicle)) {
-                //lastPlayerPVehicle = PlayerPVehicle;
-                return (DWORD)PlayerPVehicle;
-            }
-        }
-
-        return 0;
-    }
-
-    char* DebugSwitchCar = (char*)0x01862c60;
     auto forcePlayerCar = (void(__fastcall*)(DWORD* DebugVehicleSelection, DWORD something, char* carname, DWORD, DWORD, DWORD))0x00858ce0;
     char* forceSpecificCar = 0;
-    char _forceSpecificCar[32];
 
     static void __fastcall forcePlayerCarDetour(DWORD* DebugVehicleSel, DWORD something, char* carname, DWORD, DWORD, DWORD) {
         if (forceSpecificCar != 0) {
@@ -1947,33 +1969,6 @@ namespace CrashFixes {
         }
     }
 
-    static void __cdecl HUDLoadedDetour() {
-        if (doFirstCarCrashFix) {
-            doFirstCarCrashFix = false;
-
-            //carname 
-            //find player pvehicle
-            //class *(pvehicle+1c)
-            //*(class+4) is uppercase xname
-            //lowercase it and replace car
-
-            DWORD PlayerPVehicle = GetPlayerPVehicle();
-
-            _memccpy(_forceSpecificCar, *(char**)(*(DWORD*)(PlayerPVehicle + 0x1c) + 0x4), 0, 31);
-
-            for (int i = 0; i < 32; i++) {
-                _forceSpecificCar[i] = std::tolower(_forceSpecificCar[i]);
-            }
-
-            cout << "Switching player car to prevent progression loss for first car crash, forcing " << _forceSpecificCar << "\n";
-
-            *DebugSwitchCar = 1;
-            forceSpecificCar = _forceSpecificCar;
-
-        }
-
-    }
-
     auto CarRenderInfoInitialize = (void(__fastcall*)(DWORD CarRenderInfo, DWORD edx, DWORD))0x0084ac40;
     static void __fastcall CarRenderInfoInitializeDetour(DWORD CarRenderInfo, DWORD edx, DWORD param) {
 //        cout << "Forcing GameFlow 6 to prevent first car crash\n";
@@ -1985,14 +1980,11 @@ namespace CrashFixes {
     static DWORD __cdecl hashBINImpersonator(char* string) {
         DWORD result = getBinHash(string);
         if (result == 0x16E8EF0D) { //hash for "PINK_SLIP_CAR_1"
-            doFirstCarCrashFix = true;
 //            cout << "Preparing to prevent first car crash\n";
             utils::call(0x0084d19e, CrashFixes::CarRenderInfoInitializeDetour);
         }
         return result;
     }
-
-
 
     auto CreateTextureDetourReturn = 0x007514ba;
     __declspec(naked) void CreateTextureCrashFix() {
@@ -2093,7 +2085,7 @@ namespace FEAftermarketMenu {
 
     }
 
-    DWORD __fastcall getSelectedPartID(DWORD this_) {
+    DWORD __fastcall GetCurrentSlotID(DWORD this_) {
         switch (*(DWORD*)(this_ + 0x58)) {
             //original menu
         case 0x93:
@@ -2116,7 +2108,7 @@ namespace FEAftermarketMenu {
 
     DWORD __fastcall getPartsList(DWORD this_) {
 
-        DWORD PartID = getSelectedPartID(this_);
+        DWORD PartID = GetCurrentSlotID(this_);
         DWORD PartID2 = 0x73; //only works fine for wheels
         bool singlePart = true;
 
@@ -2267,6 +2259,7 @@ namespace Overlay {
     void __cdecl imgui_init() {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
+        ImPlot::CreateContext();
         ImGuiIO& io = ImGui::GetIO(); (void)io;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
@@ -2420,6 +2413,7 @@ namespace Overlay {
 
 }
 
+//Effects
 namespace CarRenderConn {
     auto TestVisibility = (DWORD(__fastcall*)(DWORD)) 0x00826bc0;
     auto AcidEffect__Disable = (void(__fastcall*)(void*)) 0x00756710;
@@ -2481,7 +2475,7 @@ namespace CarRenderConn {
         DWORD thisMarkerXList = *(DWORD*)(CarRenderConn + markerOffsetCRC);
         DWORD CRIMarker = *(DWORD*)(CarRenderInfo + markerOffsetCRI); //5d0 brakelight left
 
-        DWORD iVar13;
+        //DWORD iVar13;
 
         if ((*(DWORD*)thisMarkerXList == thisMarkerXList) && CRIMarker != (CarRenderInfo + markerOffsetCRI)) {
             //            iVar13 = *(int*)((int)*ThreadLocalStoragePointer + *_tls_index * 4);
@@ -2567,11 +2561,11 @@ namespace CarRenderConn {
 #define GlassShatterEffectHeadlights 0x7A656CCB
 #define GlassShatterEffectBrakelights 0x925D4FFA
 
-        puVar1 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, GlassShatterEffectHeadlights, 0);
+        puVar1 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, GlassShatterEffectHeadlights, 0);
         if (puVar1 == (DWORD*)0x0) puVar1 = (DWORD*)Attrib::DefaultDataArea(4);
         shatterEffectHeadlights = puVar1[1];
 
-        puVar1 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, GlassShatterEffectBrakelights, 0);
+        puVar1 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, GlassShatterEffectBrakelights, 0);
         if (puVar1 == (DWORD*)0x0) puVar1 = (DWORD*)Attrib::DefaultDataArea(4);
         shatterEffectBrakelights = puVar1[1];
         if ((param_1 & 8)) FireParticles(CarRenderConn, 0, shatterEffectBrakelights, CARFXPOS_BRAKELIGHT_LEFT);
@@ -2597,23 +2591,23 @@ namespace CarRenderConn {
                 && ((*(int*)(CarRenderConn + 0x234) != 0 && (*(float*)(CarRenderConn + 0x238) <= fVar7)))))) { //DistanceToView
 
 
-            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, MissShiftEffect, 0);
+            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, MissShiftEffect, 0);
             if (puVar5 == (DWORD*)0x0) _MissShiftEffect = MissShiftEffect; //if it doesn't exist as a field, force an emittergroup node
             else _MissShiftEffect = puVar5[1];
 
-            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, NOSEffect, 0);
+            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, NOSEffect, 0);
             if (puVar5 == (DWORD*)0x0) _NOSEffect = NOSEffect; //if it doesn't exist as a field, force an emittergroup node
             else _NOSEffect = puVar5[1];
 
-            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, ExhaustSmokeEffect, 0);
+            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, ExhaustSmokeEffect, 0);
             if (puVar5 == (DWORD*)0x0) _ExhaustSmokeEffect = ExhaustSmokeEffect; //if it doesn't exist as a field, force an emittergroup node
             else _ExhaustSmokeEffect = puVar5[1];
 
-            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, NOSTrailEffect, 0);
+            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, NOSTrailEffect, 0);
             if (puVar5 == (DWORD*)0x0) _NOSTrailEffect = NOSTrailEffect; //if it doesn't exist as a field, force an emittergroup node
             else _NOSTrailEffect = puVar5[1];
 
-            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::_Instance*)(CarRenderConn + 0x14), 0, BackfireEffect, 0);
+            puVar5 = (DWORD*)Attrib::Instance::GetAttributePointer((Attrib::Instance*)(CarRenderConn + 0x14), 0, BackfireEffect, 0);
             if (puVar5 == (DWORD*)0x0) _BackfireEffect = BackfireEffect; //if it doesn't exist as a field, force an emittergroup node
             else _BackfireEffect = puVar5[1];
             /*
@@ -2702,10 +2696,467 @@ namespace CarRenderConn {
     //}
 }
 
+//Dynamic load of available cars from vlted, regardless of the save game
+namespace FECarList {
+    auto FUN_load_carlist_00506a80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00506a80;
+    auto vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x004609a0;
+    auto FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x0045ea80;
+    auto vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x0045eaa0;
+    auto FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x0045ced0;
+    auto GetCollectionKey_0045cbe0 = (DWORD(__fastcall*)(Attrib::Instance * this_)) 0x0045cbe0;
+    auto FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x004628f0;
+
+    bool* IgnorePlayerUsable_012bb1d8 = (bool*)0x012bb1d8;
+
+    //FEPlayerCarDB
+    auto CreateNewCarRecord = (FECarRecord * (__fastcall*)(void*)) 0x0050f220;
+    auto CreateNewCustomizationRecord = (FECustomizationRecord * (__fastcall*)(void*)) 0x00513880;
+
+    //FECarRecord
+    auto GetType = (int(__fastcall*)(FECarRecord*)) 0x00507710;
+    auto FECarRecord__GetNameHash_005079e0 = (DWORD(__cdecl*)(DWORD)) 0x005079e0;
+    auto FECarRecord__GetManufacturerName_00507d10 = (char* (__cdecl*)(DWORD)) 0x00507d10;
+    auto FECarRecord__GetManuLogoHash_00502230 = (DWORD(__cdecl*)(char*, bool)) 0x00502230;
+    auto FUN_005199f0 = (void(__fastcall*)(DWORD*, DWORD edx, DALVehicleCommands::CarInfo*)) 0x005199f0;
+
+    FECarRecord* FECarRecordArray = NULL;
+    int FECarRecordArraySize = 0;
+
+#define MAX_CARS_IN_SAVEGAME 330
+#define fe_carlist 0xCDCA884C
+#define StockCars 0xA28B3B3D
+#define PlayerUsable 0xF099B6AC
+
+    void __fastcall DALVehicleCommands__GetStockCars__Execute(DWORD* param_1) {
+
+
+        DALVehicleCommands::CarInfo local_28;
+
+        param_1[3] = param_1[2]; //vector stuff
+
+        DWORD carlist_node[4];
+        DWORD StockCarsArray[4];
+
+        FUN_load_carlist_00506a80(carlist_node, 0, fe_carlist, 0);
+        vlt_loadArray_004609a0(carlist_node, 0, StockCarsArray, StockCars);
+
+        auto totalCars = FUN_getArraySize_0045ea80(StockCarsArray);
+
+        //cout << "DALVehicleCommands::GetStockCars\n";
+        //cout << "Total cars " << totalCars << "\n";
+
+        for (int i = 0; i < totalCars; i++) {
+
+            DWORD* currentVal = vlt_getArrayElement_0045eaa0(StockCarsArray, 0, i);
+            if (currentVal == 0) continue;
+
+            //printf("Array value exists\n");
+
+            DWORD auStack_68[4];
+            FUN_0045ced0(auStack_68, 0, currentVal);
+
+            //printf("requested pvehicle 0x%08X\n", auStack_68[1]);
+
+            //DebugBreak();
+
+            Attrib::Gen::pvehicle pvehicle;
+            Attrib::Gen::pvehicle::constructor(&pvehicle, 0, auStack_68[1], 0);
+
+            Attrib::Gen::frontend frontend;
+
+
+            //if (pvehicle.mLayoutPtr != NULL) printf("gotten pvehicle %s\n", pvehicle.mLayoutPtr->CollectionName);
+
+
+            if ((pvehicle.mCollection != NULL) && (((byte)pvehicle.mFlags & 1) == 0)) {
+                Attrib::Gen::frontend::constructor(&frontend, 0, &(pvehicle.mLayoutPtr)->frontend, 0);
+                auto pcVar1 = ((pvehicle.mLayoutPtr)->MODEL).mString;
+
+                //cout << "pvehicle exists: " << (DWORD*)(pvehicle[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
+
+                bool bVar2 = true;
+                //bVar2 = FUN_00507030(pvehicle);
+                if ((bVar2) && (frontend.mCollection != NULL)) {
+                    //cout << "frontend exists: "<< (DWORD*)(frontend[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
+
+                    auto PlayerUsable_00 = Attrib::Instance::GetAttributePointer((Attrib::Instance*)&pvehicle, 0, PlayerUsable, 0);
+                    if (PlayerUsable_00 != NULL && !*IgnorePlayerUsable_012bb1d8) {
+                        if (!*(bool*)PlayerUsable_00) continue;
+                    }
+                    //cout << "player usable\n";
+
+                    if (((pcVar1 != NULL)) && (((*pcVar1 != '\0' && (((byte)pvehicle.mFlags & 1) == 0))))) {
+
+                        auto frontendKey = GetCollectionKey_0045cbe0((Attrib::Instance*)&frontend);
+                        auto pvehicleKey = GetCollectionKey_0045cbe0((Attrib::Instance*)&pvehicle);
+
+                        //cout << "pvehicle " << pvehicle.mLayoutPtr->CollectionName << "\n";
+                        //cout << "frontend " << frontend.mLayoutPtr->CollectionName << "\n";
+
+
+                        local_28.mode = DALVehicleCommands::RaceMode::MODE_MAX;
+                        local_28.damage = 0.0;
+                        // doesnt need a FECarRecord (use the inner function)
+                        local_28.carNameHash = FECarRecord__GetNameHash_005079e0(frontendKey); //__cdecl //FECarRecord::GetNameHash_0050fb30(this);
+                        // needs to be tweaked a bit
+                        auto uVar3 = frontendKey; //FECarRecord::GetFEKey_00507900(this);
+                        // doesnt need a FECarRecord
+                        // doesnt need a FECarRecord
+                        local_28.carManuLogoHash = FECarRecord__GetManuLogoHash_00502230(FECarRecord__GetManufacturerName_00507d10(frontendKey), false); //__cdecl __cdecl
+                        // still doesnt need a FECarRecord
+                        local_28.carLogoHash_pvehicleKey = pvehicleKey;
+                        //local_28.carLogoHashpvehicleKey = FECarRecord__GetLogoHash_00507bd0(frontendKey); //unused anyways
+                        // hmmmmmmmmmmmmmmmmmmm
+                        local_28.handle = MAX_CARS_IN_SAVEGAME + i;
+                        local_28.drivetrain = DALVehicleCommands::DriveTrain::DRIVETRAIN_FWD; //unused
+                        // doable
+                        switch (frontend.mLayoutPtr->region) {
+                        case 0:
+                            local_28.region = 0x10000;
+                            break;
+                        case 1:
+                            local_28.region = 0x20000;
+                            break;
+                        case 2:
+                            local_28.region = 0x40000;
+                            break;
+                        case 3:
+                            local_28.region = 0x80000;
+                            break;
+                        default:
+                            local_28.region = 0;
+                        }
+                        // who cares
+                        //bVar7 = FECarRecord::IsPULCUnlocked_00508210(this);
+                        //// who cares x2
+                        //if ((bVar7) || (bVar7 = FECarRecord::IsCECar_00507f80(this), bVar7)) {
+                        //    local_28.carCost = 0;
+                        //}
+                        //else {
+                        //    local_28.carCost = (frontend.mLayoutPtr)->Cost;
+                        //}
+                        //if (iVar2 == CARNAME_ACURA_INTEGRALS) {
+                        //    local_28.carCost = 0;
+                        //}
+                        local_28.carCost = (frontend.mLayoutPtr)->Cost;
+                        FUN_005199f0(param_1 + 2, 0, &local_28);
+
+                    }
+                }
+                Attrib::Instance::destructor((Attrib::Instance*)&frontend);
+            }
+            Attrib::Instance::destructor((Attrib::Instance*)&pvehicle);
+            if (auStack_68[2] != 0) {
+                FUN_004628f0(auStack_68);
+            }
+
+
+
+
+
+
+        }
+
+    }
+
+    void fillInFECarRecords() {
+        DWORD carlist_node[4];
+        DWORD StockCarsArray[4];
+
+        FUN_load_carlist_00506a80(carlist_node, 0, fe_carlist, 0);
+        vlt_loadArray_004609a0(carlist_node, 0, StockCarsArray, StockCars);
+
+        auto totalCars = FUN_getArraySize_0045ea80(StockCarsArray);
+        //cout << "Total cars " << totalCars << "\n";
+
+        FECarRecordArray = new FECarRecord[totalCars];
+        FECarRecordArraySize = totalCars;
+
+        switch (CURRENT_GAME_VERSION) {
+        case UC_1_21:
+            utils::set(0x00516e69, FECarRecordArray); //replace array in GetCheapestStockCar, only ever used if the player has no pink slip cars and gets busted with all his cars (= impossible in uce)
+            utils::nop(0x00516e6d, 5);
+            utils::set(0x00516f40, FECarRecordArraySize);
+            break;
+        case UC_1_0:
+            utils::set(0x0052cb26, FECarRecordArray); //replace array in GetCheapestStockCar, only ever used if the player has no pink slip cars and gets busted with all his cars (= impossible in uce)
+            utils::nop(0x0052cb2a, 5);
+            utils::set(0x0052cbfc, FECarRecordArraySize);
+            break;
+        }
+
+        for (int i = 0; i < totalCars; i++) {
+
+            DWORD* currentVal = vlt_getArrayElement_0045eaa0(StockCarsArray, 0, i);
+            if (currentVal == 0) continue;
+
+            DWORD auStack_68[4];
+            FUN_0045ced0(auStack_68, 0, currentVal);
+
+            Attrib::Gen::pvehicle pvehicle;
+            Attrib::Gen::pvehicle::constructor(&pvehicle, 0, auStack_68[1], 0);
+
+            Attrib::Gen::frontend frontend;
+
+            if ((pvehicle.mCollection != NULL) && (((byte)pvehicle.mFlags & 1) == 0)) {
+                Attrib::Gen::frontend::constructor(&frontend, 0, &(pvehicle.mLayoutPtr)->frontend, 0);
+                auto pcVar1 = ((pvehicle.mLayoutPtr)->MODEL).mString;
+
+                //cout << "pvehicle exists: " << (DWORD*)(pvehicle[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
+
+                bool bVar2 = true;
+                //bVar2 = FUN_00507030(pvehicle);
+                if ((bVar2) && (frontend.mCollection != NULL)) {
+                    //cout << "frontend exists: "<< (DWORD*)(frontend[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
+
+                    auto PlayerUsable_00 = Attrib::Instance::GetAttributePointer((Attrib::Instance*)&pvehicle, 0, PlayerUsable, 0);
+                    if (PlayerUsable_00 != NULL && !*IgnorePlayerUsable_012bb1d8) {
+                        if (!*(bool*)PlayerUsable_00) continue;
+                    }
+                    //cout << "player usable\n";
+
+                    if (((pcVar1 != NULL)) && (((*pcVar1 != '\0' && (((byte)pvehicle.mFlags & 1) == 0))))) {
+
+                        auto frontendKey = GetCollectionKey_0045cbe0((Attrib::Instance*)&frontend);
+                        auto pvehicleKey = GetCollectionKey_0045cbe0((Attrib::Instance*)&pvehicle);
+
+                        //cout << "pvehicle " << pvehicle.mLayoutPtr->CollectionName << "\n";
+                        //cout << "frontend " << frontend.mLayoutPtr->CollectionName << "\n";
+
+                        FECarRecordArray[i].handle = MAX_CARS_IN_SAVEGAME + i;
+                        FECarRecordArray[i].frontend = frontendKey;
+                        FECarRecordArray[i].pvehicle = pvehicleKey;
+                        FECarRecordArray[i].preset = 0;
+                        switch (frontend.mLayoutPtr->region) { //region | stock
+                        case 0:
+                            FECarRecordArray[i].filterBits = 0x10000 | 1;
+                            break;
+                        case 1:
+                            FECarRecordArray[i].filterBits = 0x20000 | 1;
+                            break;
+                        case 2:
+                            FECarRecordArray[i].filterBits = 0x40000 | 1;
+                            break;
+                        case 3:
+                            FECarRecordArray[i].filterBits = 0x80000 | 1;
+                            break;
+                        default:
+                            FECarRecordArray[i].filterBits = 0 | 1;
+                        }
+                        FECarRecordArray[i].customization = -1;
+                        FECarRecordArray[i].careerHandle = -1;
+                        FECarRecordArray[i].isPresetSkin = 0;
+                        FECarRecordArray[i].isPinkSlip = 0;
+                    }
+                }
+                Attrib::Instance::destructor((Attrib::Instance*)&frontend);
+            }
+            Attrib::Instance::destructor((Attrib::Instance*)&pvehicle);
+            if (auStack_68[2] != 0) {
+                FUN_004628f0(auStack_68);
+            }
+
+        }
+    }
+
+    FECarRecord* __fastcall GetCarRecordByHandle(FECarRecord* FEPlayerCarDB, DWORD, int handle) {
+        if (FECarRecordArray == NULL) fillInFECarRecords();
+        for (int i = 0; i < FECarRecordArraySize; i++) {
+            if (FECarRecordArray[i].handle == handle) return &FECarRecordArray[i];
+        }
+        //printf("existing car record\n");
+        for (int i = 0; i < MAX_CARS_IN_SAVEGAME; i++) {
+            if (FEPlayerCarDB[i].handle == handle) return &FEPlayerCarDB[i];
+        }
+        return NULL;
+    }
+
+    __declspec(naked) void GetCarRecordByHandle_safe_wrapper() { //fixes undefined behavior causing a crash due to ECX expected unchanged
+        __asm {
+            push ebx;
+            push ecx;
+            push edx;
+            push esi;
+            push edi;
+
+            push edi;
+
+            call GetCarRecordByHandle;
+
+            pop edi;
+            pop esi;
+            pop edx;
+            pop ecx;
+            pop ebx;
+            ret 0x4;
+        }
+    }
+
+    FECarRecord* __stdcall GetCarRecordByHandleStatic(int handle) {
+        return GetCarRecordByHandle((FECarRecord*)(*UserProfile_Player1 + 0x88), 0, handle);
+    }
+
+    FECarRecord* __fastcall GetCarRecordByFEKey(FECarRecord* FEPlayerCarDB, DWORD, int FEKey) {
+        if (FECarRecordArray == NULL) fillInFECarRecords();
+        for (int i = 0; i < FECarRecordArraySize; i++) {
+            if (FECarRecordArray[i].frontend == FEKey) return &FECarRecordArray[i];
+        }
+        for (int i = 0; i < MAX_CARS_IN_SAVEGAME; i++) {
+            if (FEPlayerCarDB[i].frontend == FEKey) return &FEPlayerCarDB[i];
+        }
+        return NULL;
+    }
+
+    FECarRecord* __fastcall GetStockCarRecord(FECarRecord* FEPlayerCarDB, DWORD, int pvehicle) {
+        if (FECarRecordArray == NULL) fillInFECarRecords();
+        for (int i = 0; i < FECarRecordArraySize; i++) {
+            if (FECarRecordArray[i].pvehicle == pvehicle && !(((char)FECarRecordArray[i].filterBits) & 1)) return &FECarRecordArray[i];
+        }
+        for (int i = 0; i < MAX_CARS_IN_SAVEGAME; i++) {
+            if (FEPlayerCarDB[i].pvehicle == pvehicle && !(((char)FEPlayerCarDB[i].filterBits) & 1)) return &FEPlayerCarDB[i];
+        }
+        return NULL;
+    }
+
+    FECarRecord* __fastcall GetCarByIndex(FECarRecord* FEPlayerCarDB, DWORD, int index) {
+        if (FECarRecordArray == NULL) fillInFECarRecords();
+        if (index < MAX_CARS_IN_SAVEGAME) return &FEPlayerCarDB[index];
+        if (index < MAX_CARS_IN_SAVEGAME + FECarRecordArraySize) return FECarRecordArray + index - MAX_CARS_IN_SAVEGAME;
+        return NULL;
+    }
+
+    FECarRecord* __fastcall CreateCar(FECarRecord* FEPlayerCarDB, DWORD, int handle, DWORD region) {
+        FECarRecord* currentCar = GetCarRecordByHandle(FEPlayerCarDB, 0, handle);
+        //printf("CreateCar called with handle %d, region %d, currentCar %p\n", handle, region, currentCar);
+        if (currentCar != NULL) {
+            FECarRecord* newCar = CreateNewCarRecord(FEPlayerCarDB);
+            if (newCar != NULL) {
+				//printf("Created new car record at %p\n", newCar);
+                newCar->frontend = currentCar->frontend;
+                newCar->pvehicle = currentCar->pvehicle;
+                newCar->filterBits = currentCar->filterBits;
+                FECustomizationRecord* customization = CreateNewCustomizationRecord(FEPlayerCarDB);
+                if (customization != NULL) {
+					//printf("Created new customization record at %p\n", customization);
+                    newCar->customization = customization->Handle;
+                    newCar->filterBits = newCar->filterBits & 0xffff0000 | region;
+                    customization->mType = GetType(currentCar);
+                    (customization->mBluePrint).Type = GetType(currentCar);
+					//printf("Created new car with handle %d, customization handle %d, type %d\n", newCar->handle, customization->Handle, customization->mType);
+                    return newCar;
+                }
+                newCar->handle = -1;
+				//printf("Failed to create customization record, reverting new car handle to -1\n");
+            }
+			//printf("Failed to create new car record\n");
+        }
+        //printf("No existing car record found for handle %d, cannot create new car.",handle);
+        return NULL;
+    }
+
+    bool __fastcall DALFeVehicle__GetCarNameHash(DWORD, DWORD, int* ret, int handle) {
+        auto record = GetCarRecordByHandleStatic(handle);
+        if (record != NULL) {
+            *ret = FECarRecord__GetNameHash_005079e0(record->frontend);
+            return true;
+        }
+        return false;
+    }
+
+    bool __fastcall DALFeVehicle__GetCarHandleByIndex(DWORD, DWORD, int* ret, int handle, int region) {
+        auto record = GetCarRecordByHandleStatic(handle);
+        if (record != NULL && record->handle != -1) { //TODO misses a region check
+            *ret = record->handle;
+            return true;
+        }
+        return false;
+    }
+
+    bool __fastcall DALFeVehicle__GetCarKeyByHandle(DWORD, DWORD, int* ret, int handle) {
+        auto record = GetCarRecordByHandleStatic(handle);
+        if (record != NULL) {
+            if (record->preset != 0 || record->preset != -1) {
+                *ret = record->preset;
+            }
+            else *ret = record->pvehicle;
+            return true;
+        }
+        return false;
+    }
+
+    bool __fastcall DALFeVehicle__GetStockCarValue(DWORD, DWORD, int* ret, int handle) {
+        auto record = GetCarRecordByHandleStatic(handle);
+        if (record != NULL) {
+            Attrib::Gen::frontend frontend;
+            Attrib::Gen::frontend::constructor(&frontend, 0, (Attrib::RefSpec*)record->frontend, 0);
+            *ret = frontend.mLayoutPtr->Cost;
+            Attrib::Instance::destructor((Attrib::Instance*)&frontend);
+            return true;
+        }
+        return false;
+    }
+
+    bool __fastcall DALFeVehicle__GetCarTier(DWORD, DWORD, int* ret, int handle) {
+        auto record = GetCarRecordByHandleStatic(handle);
+        if (record != NULL) {
+            Attrib::Gen::pvehicle pvehicle;
+            Attrib::Gen::pvehicle::constructor(&pvehicle, 0, record->pvehicle, 0);
+            *ret = pvehicle.mLayoutPtr->RacingTier;
+            Attrib::Instance::destructor((Attrib::Instance*)&pvehicle);
+            return true;
+        }
+        return false;
+    }
+
+    auto CreateNewCustomCarDetourReturn = 0x005174a6;
+    __declspec(naked) void CreateNewCustomCarDetour() {
+        __asm {
+            push eax;
+            push ecx;
+            push edx;
+
+            //FEPlayerCarDB already in ecx
+            push esi; //handle
+            call GetCarRecordByHandle;
+
+            mov edi, eax;
+
+            pop edx;
+            pop ecx;
+            pop eax;
+
+            xor ebx, ebx;
+            jmp CreateNewCustomCarDetourReturn;
+        }
+    }
+
+    auto BuildRideForPlayerDetourReturn = 0x0050fa12;
+    __declspec(naked) void BuildRideForPlayerDetour() {
+        __asm {
+            //push ebx;
+            push ecx;
+            push edx;
+
+            //FEPlayerCarDB already in ecx
+            push ebp; //handle
+            call GetCarRecordByHandle;
+
+            mov esi, eax;
+
+            pop edx;
+            pop ecx;
+            //pop ebx;
+
+            mov ebx, ecx;
+
+            jmp BuildRideForPlayerDetourReturn;
+        }
+    }
+
+}
+
 namespace ucetesting {
     using namespace std;
-
-    std::ofstream modscript;
 
     //ok mostly
     namespace prints {
@@ -2943,7 +3394,6 @@ namespace ucetesting {
         auto VinylHasMirror = (bool(__fastcall*)(void* this_)) 0x005cdd50;
         auto VinylNotFullbody = (bool(__fastcall*)(void* this_)) 0x005d2670;
         auto VinylHasColours = (bool(__fastcall*)(void* this_)) 0x005cdd10;
-        auto getLocalizedString = (char* (__cdecl*)(DWORD binHash)) 0x00575d60;
 
         auto FETreeDataNode_assign_label = (void* (__fastcall*)(FETreeDataNode * this_, DWORD unaff, char* name))0x00536620;
 
@@ -2958,8 +3408,8 @@ namespace ucetesting {
         void __fastcall CreateVinylEditMenu(void* this_, DWORD) {
             FETreeDataNode* curTreeNode;
             char* pcVar4;
-            DWORD uVar9;
-            DWORD uVar10;
+            //DWORD uVar9;
+            //DWORD uVar10;
             LinkedNode local_14;
             LinkedNode* current;
             char local_4;
@@ -3267,201 +3717,57 @@ namespace ucetesting {
 
     }
 
-    //TODO its majorly fucked
+    //nothing left
     namespace feCarsShopTroles {
 
-        auto FUN_addCarToRegion_00518220 = (void(__fastcall*)(DWORD this_, DWORD unaff, DWORD, FECarRecord*)) 0x00518220;
-        auto FUN_load_carlist_00506a80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00506a80;
-        auto vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x004609a0;
-        auto FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x0045ea80;
-        auto vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x0045eaa0;
-        auto FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x0045ced0;
-        auto vltget_pvehicle_00451d40 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00451d40;
-        auto vltget_frontend_005019b0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x005019b0;
-        auto FUN_00507030 = (bool(__fastcall*)(DWORD * this_)) 0x00507030;
-        auto getVltValuePointer_0045e7d0 = (DWORD(__fastcall*)(DWORD * this_, DWORD unaff, DWORD field, DWORD arrayIndex))0x0045e7d0;
-        auto FUN_0045cbe0 = (DWORD(__fastcall*)(DWORD * this_)) 0x0045cbe0;
-        auto SavegameCar_update_00507610 = (void(__fastcall*)(FECarRecord * this_)) 0x00507610;
-        auto FUN_vltnode_clearFromMem_00462550 = (void(__fastcall*)(DWORD * this_)) 0x00462550;
-        auto FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x004628f0;
+        //auto FUN_addCarToRegion_00518220 = (void(__fastcall*)(DWORD this_, DWORD unaff, DWORD, FECarRecord*)) 0x00518220;
+        //auto FUN_00507030 = (bool(__fastcall*)(DWORD * this_)) 0x00507030;
+        //auto SavegameCar_update_00507610 = (void(__fastcall*)(FECarRecord * this_)) 0x00507610;
+        //auto FUN_vltnode_clearFromMem_00462550 = (void(__fastcall*)(DWORD * this_)) 0x00462550; //Attrib::Instance::destructor
+        
+        /*
+        FECarRecord* cachedTrollerCarRecord = new FECarRecord();
+        DWORD lastIndex;
 
+        DWORD FECarLotStateManager;
 
-        auto FUN_00462c80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00462c80;
-        auto FUN_00464a20 = (DWORD(__cdecl*)(DWORD, DWORD)) 0x00464a20;
+        FECarRecord* __fastcall MakeCarRecord(DWORD PlayerCarDB, DWORD, DWORD Handle) {
+            if (FECarLotStateManager == NULL) return cachedTrollerCarRecord;
+            if (lastIndex != *(int*)(FECarLotStateManager + 0xc4)) {
+                lastIndex = *(int*)(FECarLotStateManager + 0xc4);
+                printf("troles\n");
 
+                DALVehicleCommands::CarInfo* carInfo = (DALVehicleCommands::CarInfo*)(**(int**)(FECarLotStateManager + 0x98) + *(int*)(FECarLotStateManager + 0xc4) * 0x28);
 
+                Attrib::Gen::pvehicle pvehicle;
+                Attrib::Gen::pvehicle::constructor(&pvehicle, 0, carInfo->carLogoHashpvehicleKey, 0);
 
-        void __fastcall FUN_load_carlist_fixup_1_0(DWORD* carlist_node, DWORD unaff, DWORD, DWORD) {
-            auto uVar7 = FUN_00464a20(0x776f8686, 0xcdca884c);
-            FUN_00462c80(carlist_node, 0, uVar7, 0);
-        }
+                printf("pvehicle %s cost %d\n", pvehicle.mLayoutPtr->CollectionName, carInfo->carCost);
 
-        void __fastcall vltget_pvehicle_00451d40_fixup_1_0(DWORD* pvehicle, DWORD unaff, DWORD data, DWORD) {
-            auto uVar7 = FUN_00464a20(0x4a97ec8f, data);
-            FUN_00462c80(pvehicle, 0, uVar7, 0);
-        }
+                //cachedTrollerCarRecord = new FECarRecord();
+                cachedTrollerCarRecord->handle = carInfo->handle; //-1
+                cachedTrollerCarRecord->frontend = pvehicle.mLayoutPtr->frontend.mCollectionKey;
+                cachedTrollerCarRecord->pvehicle = GetCollectionKey_0045cbe0((Attrib::Instance*)&pvehicle);
+                cachedTrollerCarRecord->preset = 0;
+                cachedTrollerCarRecord->filterBits = carInfo->region | 0x1;
+                cachedTrollerCarRecord->customization = -1;
+                cachedTrollerCarRecord->careerHandle = -1;
+                cachedTrollerCarRecord->isPresetSkin = 0;
+                cachedTrollerCarRecord->isPinkSlip = 0;
 
-
-
-
-
-
-        void __fastcall FECarsShopMenuDetourCPP(DWORD ecx, DWORD edx) {
-
-            DWORD carlist_node[4];
-            DWORD StockCarsArray[4];
-
-#define fe_carlist 0xCDCA884C
-#define StockCars 0xA28B3B3D
-#define PlayerUsable 0xF099B6AC
-
-            FUN_load_carlist_00506a80(carlist_node, 0, fe_carlist, 0);
-            vlt_loadArray_004609a0(carlist_node, 0, StockCarsArray, StockCars);
-
-            auto totalCars = FUN_getArraySize_0045ea80(StockCarsArray);
-
-            auto playerCars = (FECarRecord*)(*(DWORD*)UserProfile_Player1 + 0x88);
-
-            for (int i = 0; i < totalCars; i++) {
-
-                DWORD* currentVal = vlt_getArrayElement_0045eaa0(StockCarsArray, 0, i);
-                if (currentVal == 0) continue;
-
-                DWORD auStack_68[4];
-                DWORD pvehicle[4];
-                DWORD frontend[4];
-                FUN_0045ced0(auStack_68, 0, currentVal);
-                vltget_pvehicle_00451d40(pvehicle, 0, auStack_68[1], 0);
-
-                if ((pvehicle[0] != 0) && (((char)pvehicle[3] & 1) == 0)) {
-                    vltget_frontend_005019b0(frontend, 0, pvehicle[1] + 8, 0);
-                    auto pcVar1 = *(char**)(pvehicle[1] + 4);
-
-                    //cout << "pvehicle exists: " << (DWORD*)(pvehicle[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
-
-                    bool bVar2 = true;
-                    //bVar2 = FUN_00507030(pvehicle);
-                    if ((bVar2) && (frontend[0] != 0)) {
-                        //cout << "frontend exists: "<< (DWORD*)(frontend[0]) << " (key = " << (DWORD*)(*(DWORD*)(pvehicle[0] + 0x10)) << ")\n";
-
-                        auto PlayerUsable_00 = getVltValuePointer_0045e7d0(pvehicle, 0, PlayerUsable, 0);
-                        if (PlayerUsable_00 != 0) {
-                            if (!*(bool*)PlayerUsable_00) continue;
-                        }
-                        //cout << "player usable\n";
-
-                        if (((pcVar1 != (char*)0x0)) && (((*pcVar1 != '\0' && (((char)pvehicle[3] & 1) == 0))))) {
-
-                            FECarRecord* pSVar1 = NULL;
-                            auto newCarFrontend = FUN_0045cbe0(frontend);
-                            auto newCarPVehicle = FUN_0045cbe0(pvehicle);
-
-
-                            for (int i = 0; i < 330; i++) {
-                                if (playerCars[i].pvehicle == newCarPVehicle) {
-                                    pSVar1 = &playerCars[i];
-                                    cout << "already in save game\n";
-                                    break;
-                                }
-                            }
-
-                            if (pSVar1 == NULL) {
-                                pSVar1 = new FECarRecord();
-                                pSVar1->id = i;
-
-                                pSVar1->frontend = newCarFrontend;
-                                pSVar1->pvehicle = newCarPVehicle;
-                                SavegameCar_update_00507610(pSVar1);
-                            }
-
-
-                            cout << "id=" << (DWORD*)pSVar1->id << "\n";
-                            cout << "frontend=" << (DWORD*)pSVar1->frontend << "\n";
-                            cout << "pvehicle=" << (DWORD*)pSVar1->pvehicle << "\n";
-                            cout << "preset=" << (DWORD*)pSVar1->preset << "\n";
-                            cout << "region=" << (DWORD*)pSVar1->filterBits << "\n";
-                            cout << "customization=" << (DWORD*)pSVar1->customization << "\n";
-                            cout << "careerHandle=" << (DWORD*)pSVar1->careerHandle << "\n";
-                            cout << "isPresetSkin=" << (DWORD*)pSVar1->isPresetSkin << "\n";
-                            cout << "isPinkSlip=" << (DWORD*)pSVar1->isPresetSkin << "\n";
-
-
-                            //add to FE
-                            DWORD this_00 = (ecx + 0x48); //america
-                            if (pSVar1->filterBits & 0x10000) {
-                                this_00 = (ecx + 0x48);
-                            }
-                            else if (pSVar1->filterBits & 0x20000) {
-                                this_00 = (ecx + 0x58);
-                            }
-                            else if (pSVar1->filterBits & 0x40000) {
-                                this_00 = (ecx + 0x68);
-                            }
-                            //else continue;
-
-                            DWORD puVar1 = ((DWORD*)this_00)[1];
-                            if (puVar1 < ((DWORD*)this_00)[2]) {
-                                ((DWORD*)this_00)[1] = puVar1 + 0x28;
-
-                                if (puVar1 != 0x0) {
-                                    ((DWORD*)puVar1)[0] = pSVar1->id;
-                                    ((DWORD*)puVar1)[1] = pSVar1->frontend;
-                                    ((DWORD*)puVar1)[2] = pSVar1->pvehicle;
-                                    ((DWORD*)puVar1)[3] = pSVar1->preset;
-                                    ((DWORD*)puVar1)[4] = pSVar1->filterBits;
-                                    *(char*)(puVar1 + 20) = pSVar1->customization;
-                                    *(char*)(puVar1 + 21) = pSVar1->careerHandle;
-                                    *(char*)(puVar1 + 22) = pSVar1->isPresetSkin;
-                                    *(char*)(puVar1 + 23) = pSVar1->padding;
-                                    *(char*)(puVar1 + 24) = pSVar1->isPinkSlip;
-                                    *(char*)(puVar1 + 25) = pSVar1->pad1;
-                                    *(char*)(puVar1 + 26) = pSVar1->pad2;
-                                    *(char*)(puVar1 + 27) = pSVar1->pad3;
-                                }
-                            }
-                            else {
-                                FUN_addCarToRegion_00518220(this_00, 0, puVar1, pSVar1);
-
-                            }
-                            cout << "car added to region " << (DWORD*)(this_00 - ecx) << "\n";
-                            //add to FE
-
-
-
-
-
-
-
-
-                        }
-                    }
-                    FUN_vltnode_clearFromMem_00462550(frontend);
-                }
-                FUN_vltnode_clearFromMem_00462550(pvehicle);
-                if (auStack_68[2] != 0) {
-                    FUN_004628f0(auStack_68);
-                }
-
-
-
-
-
-
+                Attrib::Instance::destructor((Attrib::Instance*)&pvehicle);
             }
 
-
+            return cachedTrollerCarRecord;
         }
 
-        DWORD FECarsShopMenuDetourReturn = 0x0059661e;
-        __declspec(naked) void FECarsShopMenuDetour() {
+        __declspec(naked) void MakeCarRecord_esi() {
             __asm {
-                mov ecx, esi;
-                call FECarsShopMenuDetourCPP;
-
-                jmp FECarsShopMenuDetourReturn;
+                mov FECarLotStateManager, esi;
+                jmp MakeCarRecord;
             }
         }
-
+        */
     }
 
     namespace raceMusic {
@@ -3480,12 +3786,23 @@ namespace ucetesting {
                 pop edi;
                 push esi;
                 mov esi, ecx;
-                jmp MusicLogic__RaceMusic_halfway;
+                jmp MusicLogic__RaceMusic_halfway; //the idea is not too bad but it misses initialization ?
                 //        ret 0x4;
             }
         }
 
 
+        auto CSTATEMGR_Base__CreateSFXCTL = (DWORD(__fastcall*)(DWORD _this, DWORD, DWORD p1, DWORD p2))0x0;
+        DWORD SFXCTL_MusicPlayback_vftable = 0x00b6d458;
+        DWORD SFXCTL_MusicPlayback;
+
+        DWORD __fastcall CSTATEMGR_Base__CreateSFXCTL_wrapper(DWORD _this, DWORD, DWORD p1, DWORD p2) {
+            auto ret = CSTATEMGR_Base__CreateSFXCTL(_this, 0, p1, p2);
+            if (*(DWORD*)ret == SFXCTL_MusicPlayback_vftable) {
+                SFXCTL_MusicPlayback = ret;
+            }
+            return ret;
+        }
 
     }
 
@@ -3625,70 +3942,281 @@ namespace ucetesting {
 
     }
 
+    
     //ok
     namespace imGuiStuff {
 
 
         static bool doDemoWindow = false;
         static bool doSunAndSkyWindow = false;
-
-        //bool show_another_window = false
-        //auto beginSceneHookDest = (void(__cdecl*)())0x0;//076a190;
-        //void __cdecl beginSceneHook() {
-        //
-        //
-        //    beginSceneHookDest();
-        //}
+        static bool doAttribEditor = false;
+        
+        //old inputs from previous zone_visual_style editor
 
 
-        void InputInt(const char* className, char* collectionName, int* value, const char* name, int step = 1) {
-            if (value == NULL) return;
-            auto valueOld = *value;
-            if (ImGui::InputInt(name, value, step, 100*step, ImGuiInputTextFlags_AutoSelectAll) && valueOld != *value) {
-                modscript << "update_field " << className << " " << collectionName << " " << name << " " << *value << "\n";
-                modscript.flush();
+        //UC 1.18
+        auto VehicleCustomizations__ReadFrom = (void(__fastcall*)(void* VehicleCustomizations, DWORD edx, void* RideInfo)) 0x00856750;
+        auto VehicleCustomizations__ReadFrom_presetride = (void(__fastcall*)(void* VehicleCustomizations, DWORD edx, Attrib::Gen::presetride* presetride)) 0x008552b0;
+        auto VehicleCustomizations__constructor = (void(__fastcall*)(void* VehicleCustomizations)) 0x00513350;
+        auto VehicleCustomizations__WriteTo = (void(__fastcall*)(void* VehicleCustomizations, DWORD edx, void* RideInfo)) 0x008560d0;
+        auto FECarHeaven_GetRideInfo = (void* (__fastcall*)(DWORD FECarHeaven)) 0x005cf280;
+        auto FECarHeaven__SetRideInfo = (void(__fastcall*)(DWORD FECarHeaven, DWORD edx, void* RideInfo)) 0x005cf0a0;
+        auto GetCarTypeInfoFromHash = (void* (__cdecl*)(DWORD))0x00817940;
+        auto RideInfo__Init = (void* (__fastcall*)(void* RideInfo, DWORD edx, int CarType, DWORD CarRenderUsage, DWORD param_3, DWORD param_4,
+            int param_5, int param_6)) 0x00851b60;
+        DWORD VinylSystem__VinylManager = 0x01270694;
+
+
+        void DoReplacePresetRide(void* RideInfo, char* presetName) {
+            unsigned char VehCustBuf[0x9ec];
+            unsigned char* VehicleCustomizations = VehCustBuf;
+
+            Attrib::Gen::presetride presetride;
+            Attrib::Gen::presetride::constructor(&presetride, 0, getVltHash(presetName), 0);
+
+            if (presetride.mCollection != NULL) {
+                //RideInfo__Init = 0x00851b60 ??
+                //BIN hash needed
+                VehicleCustomizations__constructor(VehicleCustomizations);
+                VehicleCustomizations__ReadFrom_presetride(VehicleCustomizations, 0, &presetride);
+                //*((int*)(Attrib::Instance::GetAttributePointer(&presetride, 0, getVltHash((char*)"CarType"), 0)) + 1) //WRONG
+                RideInfo__Init(RideInfo, 0, *(int*)(VehicleCustomizations + 0x9d0), 0, 0, 0, 0, 0);
+                VehicleCustomizations__WriteTo(VehicleCustomizations, 0, RideInfo);
+                FECarHeaven__SetRideInfo(*FECarHeaven, 0, RideInfo);
             }
-        }
-        void InputInt(const char* className, char* collectionName, Attrib::_Instance* inst, const char* name, int step = 1) {
-            auto value = (int*)Attrib::Instance::GetAttributePointerFromString(inst, name, 0);
-            InputInt(className, collectionName, value, name, step);
+
+            Attrib::Instance::destructor(&presetride);
         }
 
-        void InputFloat(const char* className, char* collectionName, float*value, const char* name, float step = 0.0f) {
-            if (value == NULL) return;
-            auto valueOld = *value;
-            if (ImGui::InputFloat(name, value, step, 100.0f*step, "%.3f", ImGuiInputTextFlags_AutoSelectAll) && valueOld != *value) {
-                modscript << "update_field " << className << " " << collectionName << " " << name << " " << *value << "\n";
-                modscript.flush();
+        void DoExportPresetRide(unsigned char* RideInfo, char* presetName) {
+
+            unsigned char VehCustBuf[0x9ec];
+            unsigned char* VehicleCustomizations = VehCustBuf;
+
+            VehicleCustomizations__constructor(VehicleCustomizations);
+            VehicleCustomizations__ReadFrom(VehicleCustomizations, 0, RideInfo);
+
+            using namespace AttribEditor;
+            if (!modscriptInitialized) initializeModscript();
+
+            {
+                char CarType[64];
+                snprintf(CarType, sizeof(CarType), "%s", GetCarTypeInfoFromHash(*(int*)(VehicleCustomizations + 0x9d0)));
+                //snprintf(CarType, sizeof(CarType), "%s", GetCarTypeInfoFromHash(*(int*)(RideInfo + 0x0)));
+                for (int i = 0; i < sizeof(CarType); i++) {
+                    CarType[i] = std::tolower(CarType[i]);
+                }
+
+                modscript << "\n# PRESET RIDE EXPORT - " << presetName << " - " << CarType << " \n# PLEASE FILL IN THE TIER !\n\n";
+                modscript << "add_node presetride " << presetName << "\n";
+                modscript << "update_field presetride " << presetName << " Tier 1\n";
+
+                modscript << "add_field presetride " << presetName << " CarType\n";
+                modscript << "update_field presetride " << presetName << " CarType Class pvehicle\n";
+                modscript << "update_field presetride " << presetName << " CarType Collection " << CarType << "\n";
+                //printf("CarType: 0x%08x\n", getVltHash(CarType));
+
+                char BINPresetName[64];
+                snprintf(BINPresetName, sizeof(BINPresetName), "%s", presetName);
+                for (int i = 0; i < sizeof(BINPresetName); i++) {
+                    BINPresetName[i] = std::toupper(BINPresetName[i]);
+                }
+                modscript << "update_field presetride " << presetName << " PresetName " << BINPresetName << "\n";
+                modscript << "update_field presetride " << presetName << " PresetCar 0x" << (DWORD*)getBinHash(BINPresetName) << "\n";
             }
+
+            //printf("BluePrintType: %d\n", *(int*)(VehicleCustomizations + 0x4a4)); //unused in uc
+            //printf("KitType: %d\n", *(int*)(VehicleCustomizations + 0x4a8));
+            //printf("KitNum: %d\n", *(int*)(VehicleCustomizations + 0x4ac));
+            modscript << "update_field presetride " << presetName << " BluePrint " << *(int*)(VehicleCustomizations + 0x4a4) << "\n";
+            modscript << "update_field presetride " << presetName << " KitType " << *(int*)(VehicleCustomizations + 0x4a8) << "\n";
+            modscript << "update_field presetride " << presetName << " KitNumber " << *(int*)(VehicleCustomizations + 0x4ac) << "\n";
+            modscript << "update_field presetride " << presetName << " RideHeight " << *(float*)(VehicleCustomizations + 0x4b0) << "\n";
+
+            //printf("BluePrintType: %d\n", *(int*)(RideInfo + 0x1b14)); //unused in uc
+            //printf("KitType: %d\n", *(int*)(RideInfo + 0x1b0c));
+            //printf("KitNum: %d\n", *(int*)(RideInfo + 0x1b10));
+            //modscript << "update_field presetride " << presetName << " BluePrint " << *(int*)(RideInfo + 0x1b14) << "\n";
+            //modscript << "update_field presetride " << presetName << " KitType " << *(int*)(RideInfo + 0x1b0c) << "\n";
+            //modscript << "update_field presetride " << presetName << " KitNumber " << *(int*)(RideInfo + 0x1b10) << "\n";
+            //modscript << "update_field presetride " << presetName << " RideHeight " << *(float*)(RideInfo + 0xe4c) << "\n";
+
+            modscript << "update_field presetride " << presetName << " Livery -1\n";
+
+            if (*(int*)(VehicleCustomizations + 0x9d4) != 1) {
+                modscript << "add_field presetride " << presetName << " VinylFinish\n";
+                modscript << "update_field presetride " << presetName << " VinylFinish " << *(int*)(VehicleCustomizations + 0x9d4) << "\n";
+            }
+            //if (*(int*)(RideInfo + 0x8) != 1) {
+            //    modscript << "add_field presetride " << presetName << " VinylFinish\n";
+            //    modscript << "update_field presetride " << presetName << " VinylFinish " << *(int*)(RideInfo + 0x8) << "\n";
+            //}
+
+
+            int attribSlotIdx = 0;
+
+            //parts
+            {
+                VehicleCustomizations::InstalledPart* vehCustParts = (VehicleCustomizations::InstalledPart*)(VehicleCustomizations + 0x34);
+                for (int i = 0; i < 115; i++) {
+                    if (vehCustParts[i].part_key != -1) {
+                        attribSlotIdx++;
+                    }
+                }
+
+                if (attribSlotIdx > 0) modscript << "add_field presetride " << presetName << " Parts " << attribSlotIdx << "\n";
+                attribSlotIdx = 0;
+                for (int i = 0; i < 115; i++) {
+                    if (vehCustParts[i].part_key != -1) {
+                        modscript << "update_field presetride " << presetName << " Parts[" << attribSlotIdx << "] SlotID " << i << "\n";
+                        modscript << "update_field presetride " << presetName << " Parts[" << attribSlotIdx << "] PartClassKey car_part\n";
+                        modscript << "update_field presetride " << presetName << " Parts[" << attribSlotIdx << "] PartCollectionKey 0x" << (DWORD*)(vehCustParts[i].part_key) << "\n";
+                        modscript << "update_field presetride " << presetName << " Parts[" << attribSlotIdx << "] KitNumber " << vehCustParts[i].kit_num << "\n";
+                        attribSlotIdx++;
+                    }
+                }
+            }
+
+
+            //paints
+            {
+                bool* customPaintsValid = (bool*)(VehicleCustomizations + 0x3cc);
+                CarPaintRecordPacked* customPaints = (CarPaintRecordPacked*)(VehicleCustomizations + 0x3d8);
+                char* partBaseMaterials = (char*)(VehicleCustomizations + 0x498);
+                attribSlotIdx = 0;
+                for (int i = 0; i < 12; i++) {
+                    if (customPaintsValid[i]) attribSlotIdx++;
+                }
+
+                if (attribSlotIdx > 0) modscript << "add_field presetride " << presetName << " Paints " << attribSlotIdx << "\n";
+                attribSlotIdx = 0;
+                for (int i = 0; i < 12; i++) {
+                    if (customPaintsValid[i]) {
+                        customPaints[i];
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 1 " << i << "\n"; //SlotID
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 2 car_paint_group\n";
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 3 0x" << (DWORD*)(customPaints[i].group) << "\n";
+                        //4 stays zero (pointer)
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 5 0x" << (DWORD*)(customPaints[i].hue) << "\n";
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 6 0x" << (DWORD*)(((int)&customPaints[i]) + 8) << "\n"; //saturation
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 7 " << (customPaints[i].variance) << "\n";
+                        modscript << "update_field presetride " << presetName << " Paints[" << attribSlotIdx << "] 8 " << (int)(partBaseMaterials[i]) << "\n";
+                        attribSlotIdx++;
+                    }
+                }
+            }
+
+
+            //removed parts
+            {
+                int* removedParts = (int*)(VehicleCustomizations + 0x9dc);
+                attribSlotIdx = 0;
+                for (int i = 0; i < 4; i++) {
+                    if (removedParts[i] != -1) attribSlotIdx++;
+                }
+
+                if (attribSlotIdx > 0) modscript << "add_field presetride " << presetName << " RemovedParts " << attribSlotIdx << "\n";
+                attribSlotIdx = 0;
+                for (int i = 0; i < 4; i++) {
+                    if (removedParts[i] != -1) {
+                        modscript << "update_field presetride " << presetName << " RemovedParts[" << attribSlotIdx << "] " << removedParts[i] << "\n";
+                        attribSlotIdx++;
+                    }
+                }
+            }
+
+
+            //autosculpt
+            {
+                unsigned char* morphValues = (unsigned char*)(VehicleCustomizations + 0x798);
+                attribSlotIdx = 0;
+                for (int i = 0; i < 40; i++) {
+                    //if (28 <= i && i <= 37) continue; //skip windtunnel
+                    if (morphValues[11 * i + 0] != 0 || morphValues[11*i + 1] != 0 || morphValues[11 * i + 2] != 0 || morphValues[11 * i + 3] != 0 
+                        || morphValues[11 * i + 4] != 0 || morphValues[11 * i + 5] != 0 || morphValues[11 * i + 6] != 0 || morphValues[11 * i + 7] != 0
+                        || morphValues[11 * i + 8] != 0 || morphValues[11 * i + 9] != 0 || morphValues[11 * i + 10] != 0)
+                        attribSlotIdx++;
+                }
+
+                if (attribSlotIdx > 0) modscript << "add_field presetride " << presetName << " Autosculpt " << attribSlotIdx << "\n";
+                attribSlotIdx = 0;
+                for (int i = 0; i < 40; i++) {
+                    //if (28 <= i && i <= 37) continue; //skip windtunnel
+                    if (morphValues[11 * i + 0] != 0 || morphValues[11 * i + 1] != 0 || morphValues[11 * i + 2] != 0 || morphValues[11 * i + 3] != 0
+                        || morphValues[11 * i + 4] != 0 || morphValues[11 * i + 5] != 0 || morphValues[11 * i + 6] != 0 || morphValues[11 * i + 7] != 0
+                        || morphValues[11 * i + 8] != 0 || morphValues[11 * i + 9] != 0 || morphValues[11 * i + 10] != 0) {
+
+                        modscript << "update_field presetride " << presetName << " Autosculpt[" << attribSlotIdx << "] RegionID " << i << "\n";
+                        for (int j = 0; j < 11; j++) if (morphValues[11 * i + j] != 0) {
+                            modscript << "update_field presetride " << presetName << " Autosculpt[" << attribSlotIdx << "] Zone" << j + 1 << " " << (float)(morphValues[11 * i + j]) / 100.0f << "\n";
+                        }
+                        attribSlotIdx++;
+                    }
+                }
+            }
+
+
+            //vinyl layers
+            {
+                int* numVinylLayers = (int*)(VehicleCustomizations + 0x670);
+                PackedVinylLayer* vinylLayers = (PackedVinylLayer*)(VehicleCustomizations + 0x4b4);
+                UINT* mirrorBits = (UINT*)(VehicleCustomizations + 0x66c);
+
+                attribSlotIdx = 0; //reusing for vinyl mirror bits
+                if (*numVinylLayers > 0) modscript << "add_field presetride " << presetName << " VinylLayers " << *numVinylLayers << "\n";
+
+                for (int i = 0; i < *numVinylLayers; i++) {
+                    //get hash from VinylSystem::VinylManager
+                    //why did they have to inline the function...
+                    if (-1 < vinylLayers[i].vinylPart && vinylLayers[i].vinylPart < *(DWORD*)(VinylSystem__VinylManager + 0xc)) {
+                        //printf("Vinyl layer at %X\n", &vinylLayers[i]);
+
+                        //key
+                        //modscript << "update_field presetride " << presetName << " VinylLayers[" << attribSlotIdx << "] 1 0x" << (DWORD*)((*(DWORD**)(VinylSystem__VinylManager + 8))[vinylLayers[i].vinylPart * 2]) << "\n";
+
+                        //now the rest... gonn pack it then commit war crimes (vlted)
+                        DWORD dat[7];
+                        int data = (int)dat;
+
+                        //printf("Vinyl part idx %d, hash %08x\n", vinylLayers[i].vinylPart, (*(DWORD**)(VinylSystem__VinylManager + 8))[vinylLayers[i].vinylPart * 2]);
+                        *(DWORD*)data = (*(DWORD**)(VinylSystem__VinylManager + 8))[vinylLayers[i].vinylPart * 2];
+                        //printf("%s\n", (*mirrorBits & (1 << (attribSlotIdx & 0x1f))) != 0 ? "Is mirrored" : "Not mirrored");
+                        *(bool*)(data + 4) = (*mirrorBits & (1 << (attribSlotIdx & 0x1f))) != 0;
+
+                        //printf("tx = %d, ty = %d\n", vinylLayers[i].transform.translationX, vinylLayers[i].transform.translationY);
+                        *(INT16*)(data + 6) = vinylLayers[i].transform.translationX;
+                        *(INT16*)(data + 8) = vinylLayers[i].transform.translationY;
+                        *(INT8*)(data + 10) = vinylLayers[i].transform.rotation;
+                        *(INT8*)(data + 11) = vinylLayers[i].transform.scaleX;
+                        *(INT8*)(data + 12) = vinylLayers[i].transform.scaleY;
+                        *(bool*)(data + 13) = vinylLayers[i].transform.proportionalScale;
+                        *(INT8*)(data + 14) = vinylLayers[i].transform.shear;
+
+                        for (int col = 0; col < 4; col++) {
+                            *(UINT8*)(data + 16 + 3 * col) = vinylLayers[i].colors[col].swatch;
+                            *(UINT8*)(data + 17 + 3 * col) = vinylLayers[i].colors[col].saturation;
+                            *(UINT8*)(data + 18 + 3 * col) = vinylLayers[i].colors[col].brightness;
+                        }
+
+                        for (int i = 0; i < 7; i++) {
+                            modscript << "update_field presetride " << presetName << " VinylLayers[" << attribSlotIdx << "] " << (i + 1) << " 0x" << ((DWORD**)data)[i] << "\n";
+                        }
+
+                    }
+
+                    attribSlotIdx++;
+                }
+            }
+
+
+            //ignore decal layers (unsupported by vlted)
+
+            modscript.flush();
         }
-        void InputFloat(const char* className, char* collectionName, Attrib::_Instance* inst, const char* name, float step=0.0f) {
-            auto value = (float*)Attrib::Instance::GetAttributePointerFromString(inst, name, 0);
-            InputFloat(className, collectionName, value, name, step);
+        void DoExportPresetRide(void* RideInfo, char* presetName) {
+            DoExportPresetRide((unsigned char*)RideInfo, presetName);
         }
 
-        void InputVector4(const char* className, char* collectionName, float* value, const char* name, float step = 0.0f) {
-            if (value == NULL) return;
-            float valueOld[4];
-            valueOld[0] = value[0];
-            valueOld[1] = value[1];
-            valueOld[2] = value[2];
-            valueOld[3] = value[3];
-            float step_fast = 100.0f * step;
-            if (//ImGui::InputFloat4(name, value, "%.3f", ImGuiInputTextFlags_AutoSelectAll)
-                ImGui::InputScalarN(name, ImGuiDataType_Float, value, 4, (void*)(step > 0.0f ? &step : NULL), (void*)(step_fast > 0.0f ? &step_fast : NULL), "%.3f", ImGuiInputTextFlags_AutoSelectAll)
-                ) {
-                if (valueOld[0] != value[0]) modscript << "update_field " << className << " " << collectionName << " " << name << " X " << value[0] << "\n";
-                if (valueOld[1] != value[1]) modscript << "update_field " << className << " " << collectionName << " " << name << " Y " << value[1] << "\n";
-                if (valueOld[2] != value[2]) modscript << "update_field " << className << " " << collectionName << " " << name << " Z " << value[2] << "\n";
-                if (valueOld[3] != value[3]) modscript << "update_field " << className << " " << collectionName << " " << name << " W " << value[3] << "\n";
-                modscript.flush();
-            }
-        }
-        void InputVector4(const char* className, char* collectionName, Attrib::_Instance* inst, const char* name, float step = 0.0f) {
-            auto value = (float*)Attrib::Instance::GetAttributePointerFromString(inst, name, 0);
-            InputVector4(className, collectionName, value, name, step);
-        }
 
         char* debugCarName = NULL;
         char* debugPresetName = NULL;
@@ -3700,203 +4228,237 @@ namespace ucetesting {
 
             // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
             {
-                //        static float f = 0.0f;
-                //static int counter = 0;
-
                 const float label_width_base = ImGui::GetFontSize() * 12;               // Some amount of width for label, based on font size.
                 const float label_width_max = ImGui::GetContentRegionAvail().x * 0.40f; // ...but always leave some room for framed widgets.
                 const float label_width = IM_MIN(label_width_base, label_width_max);
                 ImGui::PushItemWidth(-label_width);                                     // Right-align: framed items will leave 'label_width' available for the label.
 
                 if (!ImGui::GetIO().WantCaptureMouse) ImGui::SetWindowFocus(NULL);
+                
 
+                if (ImGui::Begin("french troles")) {
+                    ImGui::Text("Ctrl+Delete to hide these overlays");
+                    ImGui::Checkbox("Show ImGui Demo", &doDemoWindow);
+                    ImGui::Checkbox("Show SunAndSky editor", &doSunAndSkyWindow);
+                    ImGui::Checkbox("Show Attrib editor", &doAttribEditor);
 
-                ImGui::Begin("french troles");
-                ImGui::Text("Ctrl+Delete to hide these overlays");
-                ImGui::Checkbox("Show ImGui Demo window", &doDemoWindow);
-                ImGui::Checkbox("Show SunAndSky window", &doSunAndSkyWindow);
+                    if (*(DWORD*)DebugVehicleSelection != NULL) {
+                        int count = (UINT)(*(UINT*)(*(DWORD*)DebugVehicleSelection + 0x20) - *(UINT*)(*(DWORD*)DebugVehicleSelection + 0x1c) >> 2);
+                        auto piVar1 = (int*)(*(DWORD*)DebugVehicleSelection + 0x1c);
+                        auto current = (int*)(*(DWORD*)DebugVehicleSelection + 0x18);
 
-                if (*(DWORD*)DebugVehicleSelection != NULL) {
-                    int count = (UINT)(*(UINT*)(*(DWORD*)DebugVehicleSelection + 0x20) - *(UINT*)(*(DWORD*)DebugVehicleSelection + 0x1c) >> 2);
-                    auto piVar1 = (int*)(*(DWORD*)DebugVehicleSelection + 0x1c);
-                    auto current = (int*)(*(DWORD*)DebugVehicleSelection + 0x18);
+                        //auto uVar2 = (*current + 1) % count;
 
-                    //auto uVar2 = (*current + 1) % count;
+                        ImGui::Text("Debug Vehicle Selection");
+                        //ImGui::Text("ID: "); ImGui::SameLine(); ImGui::InputInt("", current);
 
-                    ImGui::Text("Debug Vehicle Selection");
-                    //ImGui::Text("ID: "); ImGui::SameLine(); ImGui::InputInt("", current);
+                        if (ImGui::BeginCombo("##DebugVehiclePicker", *(char**)(*piVar1 + *current * 4), ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview)) {
+                            for (int n = 0; n < count; n++)
+                                if (ImGui::Selectable(*(char**)(*piVar1 + n * 4), n == *current)) {
+                                    *current = n - 1;
+                                    *current %= count;
+                                    *(char*)(DebugVehicleSelection + 1) = 1; //i hate DWORD + 1 being actually + 4 bytes
+                                }
+                            ImGui::EndCombo();
+                        }
 
-                    if (ImGui::BeginCombo("##DebugVehiclePicker", *(char**)(*piVar1 + *current * 4), ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview)) {
-                        for (int n = 0; n < count; n++)
-                            if (ImGui::Selectable(*(char**)(*piVar1 + n * 4), n == *current)) {
-                                *current = n-1;
-                                *current %= count;
-                                *(char*)(DebugVehicleSelection + 1) = 1; //i hate DWORD + 1 being actually + 4 bytes
-                            }
-                        ImGui::EndCombo();
+                        //ImGui::Text("Car Name: %s", *(char**)(*piVar1 + uVar2 * 4));
+                        //if (ImGui::Button("Switch")) *(char*)(DebugVehicleSelection + 1) = 1; //i hate DWORD + 1 being actually + 4 bytes
+
                     }
 
-                    //ImGui::Text("Car Name: %s", *(char**)(*piVar1 + uVar2 * 4));
-                    //if (ImGui::Button("Switch")) *(char*)(DebugVehicleSelection + 1) = 1; //i hate DWORD + 1 being actually + 4 bytes
+                    //if (Overlay::di_keyboard != NULL) ImGui::Text("DInput8: Keyboard found");
+                    //if (Overlay::di_mouse != NULL) ImGui::Text("DInput8: Mouse found");
+
+                    //if (UserProfile_Player1 != NULL) ImGui::Text("Current camera: %d", *(ePlayerSettingsCameras*)(*UserProfile_Player1 + 0x4d5f0 + 0x7c + 0x20));
+                    //std::to_string(*(ePlayerSettingsCameras*)(*UserProfile_Player1 + 0x4d5f0 + 0x7c + 0x20))
+
+                    if (*FECarHeaven != NULL && CURRENT_GAME_VERSION == UC_1_21) {
+                        static char presetRideName[64];
+                        float width = ImGui::CalcItemWidth();
+                        ImGui::SetNextItemWidth(width);
+                        ImGui::InputText("##presetridename", presetRideName, sizeof(presetRideName));
+                        ImGui::SetNextItemWidth(width);
+                        if (ImGui::Button("Export current PresetRide")) {
+                            void* RideInfo = FECarHeaven_GetRideInfo(*FECarHeaven);
+                            DoExportPresetRide(RideInfo, presetRideName);
+                        }
+                        ImGui::SetNextItemWidth(width);
+                        if (ImGui::Button("Replace car with PresetRide")) {
+                            void* RideInfo = FECarHeaven_GetRideInfo(*FECarHeaven);
+                            DoReplacePresetRide(RideInfo, presetRideName);
+                        }
+                    }
+
+
+                    ImGuiIO& io = ImGui::GetIO(); (void)io;
+                    ImGui::Text("%.1f FPS/%.3f ms", io.Framerate, 1000.0f / io.Framerate);
+
+                    //ImGui::Text("mMainViewNumSubmissions = %d",         **((DWORD**)(*Renderer + 0x24))); //not right and doesnt do shit anyways
+                    //ImGui::Text("mMainViewNumPolys = %d",               (*(DWORD**)(*Renderer + 0x24))[1]);
+                    //ImGui::Text("mMainViewWorldNumSubmissions = %d",    (*(DWORD**)(*Renderer + 0x24))[2]);
+                    //ImGui::Text("mMainViewWorldNumPolys = %d",          (*(DWORD**)(*Renderer + 0x24))[3]);
+                    //ImGui::Text("mShadowViewNumSubmissions = %d",       (*(DWORD**)(*Renderer + 0x24))[4]);
+                    //ImGui::Text("mShadowViewNumPolys = %d",             (*(DWORD**)(*Renderer + 0x24))[5]);
+                    //ImGui::Text("mShadowViewWorldNumSubmissions = %d",  (*(DWORD**)(*Renderer + 0x24))[6]);
+                    //ImGui::Text("mEnvMapViewNumSubmissions = %d",       (*(DWORD**)(*Renderer + 0x24))[7]);
+                    //ImGui::Text("mEnvMapViewNumPolys = %d",             (*(DWORD**)(*Renderer + 0x24))[8]);
+
+                    using namespace raceMusic;
+                    if (SFXCTL_MusicPlayback != NULL) {
+                        ImGui::Text("SFXCTL_MusicPlayback at 0x%08X", SFXCTL_MusicPlayback);
+
+                        DWORD* MusicLogic = (DWORD*)(SFXCTL_MusicPlayback + 0x30);
+                        if (MusicLogic != NULL) {
+                            ImGui::Text("MusicLogic at 0x%08X", *MusicLogic);
+                            if ((char**)(*MusicLogic + 0x1c) != NULL) ImGui::Text("MusicLogic state %s", *(char**)(*MusicLogic + 0x1c));
+                        }
+                    }
 
                 }
-
-                //if (Overlay::di_keyboard != NULL) ImGui::Text("DInput8: Keyboard found");
-                //if (Overlay::di_mouse != NULL) ImGui::Text("DInput8: Mouse found");
-
-                //        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-                //        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-                //if (UserProfile_Player1 != NULL) ImGui::Text("Current camera: %d", *(ePlayerSettingsCameras*)(*UserProfile_Player1 + 0x4d5f0 + 0x7c + 0x20));
-                //std::to_string(*(ePlayerSettingsCameras*)(*UserProfile_Player1 + 0x4d5f0 + 0x7c + 0x20))
-
-
-                ImGuiIO& io = ImGui::GetIO(); (void)io;
-                ImGui::Text("%.1f FPS/%.3f ms", io.Framerate, 1000.0f / io.Framerate);
-
-                //ImGui::Text("mMainViewNumSubmissions = %d",         **((DWORD**)(*Renderer + 0x24))); //not right and doesnt do shit anyways
-                //ImGui::Text("mMainViewNumPolys = %d",               (*(DWORD**)(*Renderer + 0x24))[1]);
-                //ImGui::Text("mMainViewWorldNumSubmissions = %d",    (*(DWORD**)(*Renderer + 0x24))[2]);
-                //ImGui::Text("mMainViewWorldNumPolys = %d",          (*(DWORD**)(*Renderer + 0x24))[3]);
-                //ImGui::Text("mShadowViewNumSubmissions = %d",       (*(DWORD**)(*Renderer + 0x24))[4]);
-                //ImGui::Text("mShadowViewNumPolys = %d",             (*(DWORD**)(*Renderer + 0x24))[5]);
-                //ImGui::Text("mShadowViewWorldNumSubmissions = %d",  (*(DWORD**)(*Renderer + 0x24))[6]);
-                //ImGui::Text("mEnvMapViewNumSubmissions = %d",       (*(DWORD**)(*Renderer + 0x24))[7]);
-                //ImGui::Text("mEnvMapViewNumPolys = %d",             (*(DWORD**)(*Renderer + 0x24))[8]);
-
-
-
                 ImGui::End();
             }
 
             if (doSunAndSkyWindow) {
+                if (ImGui::Begin("SunAndSky and visual treatment", &doSunAndSkyWindow)) {
+                    static char sunSkyCurKeyBuf[64], sunSkyDesiredKeyBuf[64];
+                    static DWORD sunSkyCurKey, sunSkyDesiredKey;
 
-                static bool preventZoneChange = false;
-                static bool preventZoneChangeOld = false;
+                    if (ImGui::TreeNode("SunAndSky")) {
 
-                static char curKeyBuf[64], desiredKeyBuf[64];
-                static DWORD curKey, desiredKey;
+                        static bool preventZoneChange = false;
+                        static bool preventZoneChangeOld = false;
 
-                if (curKey != theSunAndSky->mCurrentKey) {
-                    snprintf(curKeyBuf, 64, "0x%08X", theSunAndSky->mCurrentKey);
-                    curKey = theSunAndSky->mCurrentKey;
-                }
-                if (desiredKey != theSunAndSky->mDesiredKey) {
-                    snprintf(desiredKeyBuf, 64, "0x%08X", theSunAndSky->mDesiredKey);
-                    desiredKey = theSunAndSky->mDesiredKey;
-                }
-
-                ImGui::Begin("SunAndSky");
-
-                if (ImGui::TreeNode("SunAndSky")) {
-                    if (ImGui::InputText("mCurrentKey", curKeyBuf, 64, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                        curKey = getVltHash(curKeyBuf);
-                        theSunAndSky->mCurrentKey = curKey;
-                    }
-                    if (ImGui::InputText("mDesiredKey", desiredKeyBuf, 64, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                        desiredKey = getVltHash(desiredKeyBuf);
-                        theSunAndSky->mDesiredKey = desiredKey;
-                    }
-                    ImGui::InputFloat("mBlendAmount", &theSunAndSky->mBlendAmount);
-
-                    ImGui::Checkbox("Prevent automatic changing", &preventZoneChange);
-
-                    if (preventZoneChange != preventZoneChangeOld) {
-                        if (preventZoneChange) {
-                            switch (CURRENT_GAME_VERSION) {
-                            case UC_1_0:
-                                utils::set<UINT32>(0x00875f44, 0x1046d966); //fld mBlendAmount (dword ptr [ESI + 0x10]) AKA do nothing
-                                utils::nop(0x00875e91, 2); //prevent current = next
-                                utils::nop(0x00875eec, 3); //prevent updating next
-                                break;
-                            case UC_1_21:
-                                utils::set<UINT32>(0x00846826, 0x1046d966); //fld mBlendAmount (dword ptr [ESI + 0x10]) AKA do nothing
-                                utils::nop(0x00846773, 2); //prevent current = next
-                                utils::nop(0x008467ce, 3); //prevent updating next
-                                break;
-                            }
+                        if (sunSkyCurKey != theSunAndSky->mCurrentKey) {
+                            snprintf(sunSkyCurKeyBuf, 64, "0x%08X", theSunAndSky->mCurrentKey);
+                            sunSkyCurKey = theSunAndSky->mCurrentKey;
                         }
-                        else {
-                            switch (CURRENT_GAME_VERSION) {
-                            case UC_1_0:
-                                utils::set<UINT32>(0x00875f44, 0x0c2444d9); //fld transition percentage (dword ptr [ESP + 0xc])
-                                utils::set<UINT16>(0x00875e91, 0x0689); //current = next
-                                utils::set<UINT32>(0x00875eec, 0xeb044689); //update next
-                                break;
-                            case UC_1_21:
-                                utils::set<UINT32>(0x00846826, 0x0c2444d9); //fld transition percentage (dword ptr [ESP + 0xc])
-                                utils::set<UINT16>(0x00846773, 0x0689); //current = next
-                                utils::set<UINT32>(0x008467ce, 0xeb044689); //update next
-                                break;
-                            }
+                        if (sunSkyDesiredKey != theSunAndSky->mDesiredKey) {
+                            snprintf(sunSkyDesiredKeyBuf, 64, "0x%08X", theSunAndSky->mDesiredKey);
+                            sunSkyDesiredKey = theSunAndSky->mDesiredKey;
                         }
 
-                        preventZoneChangeOld = preventZoneChange;
-                    }
-                    ImGui::TreePop();
-                }
 
-                if (ImGui::TreeNode("Current zone_visual_style")) {
-                    ImGui::Text("Warning: this may edit parent Attrib nodes!");
-                    
-                    Attrib::_Instance next; //Attrib::Gen::zone_visual_style
-                    Attrib::_Instance current;
+                        if (ImGui::InputText("mCurrentKey", sunSkyCurKeyBuf, 64, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                            sunSkyCurKey = getVltHash(sunSkyCurKeyBuf);
+                            theSunAndSky->mCurrentKey = sunSkyCurKey;
+                        }
+                        if (ImGui::InputText("mDesiredKey", sunSkyDesiredKeyBuf, 64, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                            sunSkyDesiredKey = getVltHash(sunSkyDesiredKeyBuf);
+                            theSunAndSky->mDesiredKey = sunSkyDesiredKey;
+                        }
+                        ImGui::InputFloat("mBlendAmount", &theSunAndSky->mBlendAmount, 0.001f, 0.01f);
 
-                    Attrib::Gen::zone_visual_style__constructor(&current, 0, theSunAndSky->mCurrentKey, 0);
-                    if (current.mCollection == NULL) Attrib::Gen::zone_visual_style__constructor(&current, 0, DEFAULT, 0);
-                    Attrib::Gen::zone_visual_style__constructor(&next, 0, theSunAndSky->mDesiredKey, 0);
-                    if (next.mCollection == NULL) Attrib::Gen::zone_visual_style__constructor(&next, 0, DEFAULT, 0);
+                        ImGui::Checkbox("Prevent automatic changing", &preventZoneChange);
 
+                        if (preventZoneChange != preventZoneChangeOld) {
+                            if (preventZoneChange) {
+                                switch (CURRENT_GAME_VERSION) {
+                                case UC_1_0:
+                                    utils::set<UINT32>(0x00875f44, 0x1046d966); //fld mBlendAmount (dword ptr [ESI + 0x10]) AKA do nothing
+                                    utils::nop(0x00875e91, 2); //prevent current = next
+                                    utils::nop(0x00875eec, 3); //prevent updating next
+                                    break;
+                                case UC_1_21:
+                                    utils::set<UINT32>(0x00846826, 0x1046d966); //fld mBlendAmount (dword ptr [ESI + 0x10]) AKA do nothing
+                                    utils::nop(0x00846773, 2); //prevent current = next
+                                    utils::nop(0x008467ce, 3); //prevent updating next
+                                    break;
+                                }
+                            }
+                            else {
+                                switch (CURRENT_GAME_VERSION) {
+                                case UC_1_0:
+                                    utils::set<UINT32>(0x00875f44, 0x0c2444d9); //fld transition percentage (dword ptr [ESP + 0xc])
+                                    utils::set<UINT16>(0x00875e91, 0x0689); //current = next
+                                    utils::set<UINT32>(0x00875eec, 0xeb044689); //update next
+                                    break;
+                                case UC_1_21:
+                                    utils::set<UINT32>(0x00846826, 0x0c2444d9); //fld transition percentage (dword ptr [ESP + 0xc])
+                                    utils::set<UINT16>(0x00846773, 0x0689); //current = next
+                                    utils::set<UINT32>(0x008467ce, 0xeb044689); //update next
+                                    break;
+                                }
+                            }
 
-                    if (ImGui::TreeNode("Layout")) {
-                        InputFloat("zone_visual_style", curKeyBuf, &((float*)current.mLayoutPtr)[0], "SunLatitude", 1.0f);
-                        InputFloat("zone_visual_style", curKeyBuf, &((float*)current.mLayoutPtr)[1], "SkyDomeRotation", 1.0f);
+                            preventZoneChangeOld = preventZoneChange;
+                        }
                         ImGui::TreePop();
                     }
 
-                    if (current.mCollection != NULL && ImGui::TreeNode("Collection")) {
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "SunOcclusionResponseRate", 0.01f);
-                        InputInt("zone_visual_style", curKeyBuf, &current, "SkyDomeStyle");
-                        InputInt("zone_visual_style", curKeyBuf, &current, "ColourCube");
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "SunLongitude", 1.0f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "VisibleLongitude", 1.0f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "SunColour", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "SunIntensity", 0.01f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "AmbientColour", 0.01f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "SHColour", 0.01f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "FogColour", 0.01f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "FogColourFar", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "FogNear",1.0f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "FogFar",1.0f);
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "SunHazeColour", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "SunHazeDistanceBias", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "FogExponent", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "SunHazeSize", 0.1f);
-                        InputInt("zone_visual_style", curKeyBuf, &current, "LensFlareIndex");
-                        InputVector4("zone_visual_style", curKeyBuf, &current, "SpecularColour", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "BloomIntensity", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "BloomThresold", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "BloomExponent", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "BloomRecoveryBias", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "BloomRecoveryScale", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "RoadReflectionIntensity", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "RoadReflectionLighting", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "RoadReflectionLightingPower", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "ToneMappingContrast", 0.01f);
-                        InputFloat("zone_visual_style", curKeyBuf, &current, "ToneMappingSaturation", 0.01f);
+                    if (ImGui::TreeNode("Current zone_visual_style")) {
+                        ImGui::Text("Warning: this may edit parent Attrib nodes!");
+
+                        Attrib::Gen::zone_visual_style current;
+
+                        Attrib::Gen::zone_visual_style::constructor(&current, 0, sunSkyCurKey, 0);
+                        //if (current.mCollection == NULL) Attrib::Gen::zone_visual_style::constructor(&current, 0, DEFAULT, 0);
+
+                        if (ImGui::InputText("Key", sunSkyCurKeyBuf, 64, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                            sunSkyCurKey = getVltHash(sunSkyCurKeyBuf);
+                        }
+
+                        //previous zone_visual_style editor
+/*
+                        if (current.mLayoutPtr != NULL && ImGui::TreeNode("Layout")) {
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current.mLayoutPtr->SunLatitude, "SunLatitude", 1.0f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &((float*)current.mLayoutPtr)[1], "SkyDomeRotation", 1.0f);
+
+                            ImGui::TreePop();
+                        }
+
+                        if (current.mCollection != NULL && ImGui::TreeNode("Collection")) {
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "SunOcclusionResponseRate", 0.01f);
+                            InputInt("zone_visual_style", sunSkyCurKeyBuf, &current, "SkyDomeStyle");
+                            InputInt("zone_visual_style", sunSkyCurKeyBuf, &current, "ColourCube");
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "SunLongitude", 1.0f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "VisibleLongitude", 1.0f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "SunColour", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "SunIntensity", 0.01f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "AmbientColour", 0.01f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "SHColour", 0.01f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "FogColour", 0.01f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "FogColourFar", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "FogNear", 1.0f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "FogFar", 1.0f);
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "SunHazeColour", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "SunHazeDistanceBias", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "FogExponent", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "SunHazeSize", 0.1f);
+                            InputInt("zone_visual_style", sunSkyCurKeyBuf, &current, "LensFlareIndex");
+                            InputVector4("zone_visual_style", sunSkyCurKeyBuf, &current, "SpecularColour", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "BloomIntensity", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "BloomThresold", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "BloomExponent", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "BloomRecoveryBias", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "BloomRecoveryScale", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "RoadReflectionIntensity", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "RoadReflectionLighting", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "RoadReflectionLightingPower", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "ToneMappingContrast", 0.01f);
+                            InputFloat("zone_visual_style", sunSkyCurKeyBuf, &current, "ToneMappingSaturation", 0.01f);
+                            ImGui::TreePop();
+                        }
+*/
+                        if (current.mCollection != NULL) AttribEditor::EditCollection(current.mCollection);
+
                         ImGui::TreePop();
                     }
-                    ImGui::TreePop();
-                }
-                
-                if(Settings::useDayNightCycle && ImGui::TreeNode("UCE day/night cycle")) {
-                    if (ImGui::InputInt("Cycle duration", &Settings::DayNightCycleDuration, 1, 100, ImGuiInputTextFlags_AutoSelectAll)) DayNight::timePerZone = (float)Settings::DayNightCycleDuration / Settings::VisualStyleCycles[DayNight::currentWeatherSet].size();
-                    ImGui::InputFloat("Time per zone", &DayNight::timePerZone, 1.0f, 100.0f, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
-                    if (ImGui::InputInt("Current weather set", &DayNight::currentWeatherSet, 1, 1, ImGuiInputTextFlags_AutoSelectAll)) DayNight::currentWeatherSet %= Settings::VisualStyleCycles.size();
-                    ImGui::TreePop();
-                }
 
+                    if (Settings::useDayNightCycle && ImGui::TreeNode("UCE day/night cycle")) {
+                        if (ImGui::InputInt("Cycle duration", &Settings::DayNightCycleDuration, 1, 100, ImGuiInputTextFlags_AutoSelectAll)) DayNight::timePerZone = (float)Settings::DayNightCycleDuration / Settings::VisualStyleCycles[DayNight::currentWeatherSet].size();
+                        ImGui::InputFloat("Time per zone", &DayNight::timePerZone, 1.0f, 100.0f, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+                        if (ImGui::InputInt("Current weather set", &DayNight::currentWeatherSet, 1, 1, ImGuiInputTextFlags_AutoSelectAll)) DayNight::currentWeatherSet %= Settings::VisualStyleCycles.size();
+                        ImGui::TreePop();
+                    }
+
+
+                }
                 ImGui::End();
+            }
+
+            if (doAttribEditor) {
+                AttribEditor::ShowAttribEditor(&doAttribEditor);
             }
 
             //Autosculpt menu
@@ -4156,7 +4718,34 @@ namespace ucetesting {
             //cout << "Player car detected : " << _forceSpecificCar << "\n";
         }
 
+
+        auto FEAftermarketStateManager__GetPart = (DWORD (__fastcall*)(DWORD th, DWORD, DWORD)) 0x0055b7e0;
+
+        void __fastcall FEAftermarketCycleMaterials(DWORD FEAftermarketStateManager) {
+
+            DWORD part = FEAftermarketStateManager__GetPart(FEAftermarketStateManager, 0, *(DWORD*)(FEAftermarketStateManager + 0x5c));
+            if (part == NULL) return;
+
+            DBCarPart* carpart = *(DBCarPart**)(part + 0x10);
+            carpart->materialFlags++;
+            if (carpart->materialFlags > 8) carpart->materialFlags = 0;
+
+            (**(void(__fastcall**)(DWORD part, DWORD edx, bool))((*(DWORD*)part + 0x14)))(part, 0, true);
+
+
+            //int RideInfo = (int)imGuiStuff::FECarHeaven_GetRideInfo(*FECarHeaven);
+            //printf("RideInfo %08X", RideInfo);
+
+            //int slot = FEAftermarketMenu::GetCurrentSlotID(FEAftermarketStateManager);
+            //DBCarPart* partsTable = (DBCarPart*)(RideInfo + 0x3d0);
+            //partsTable[slot].materialFlags++;
+            //if (partsTable[slot].materialFlags > 8) partsTable[slot].materialFlags = 0;
+
+            //imGuiStuff::FECarHeaven__SetRideInfo(*FECarHeaven, 0, (void*)RideInfo);
+        }
+
     }
+
 
     static UINT APT_AQUARIUS_MEDIUM;
     static UINT APT_AQUARIUS_MEDIUM_brk;
@@ -4165,6 +4754,21 @@ namespace ucetesting {
     static UINT HELV_NEUE_STD_CN;
     static UINT HELV_NEUE_STD_CN_BLD;
     static UINT APT_AQUARIUS_EXTRABOLD_NUM;
+
+    static FE::PAINTSLOTINFO allSlots[] = {
+        {CARSLOTID_BODY, INVALID_PAINT_SLOT, "~CUST_PAINT_ALL_REGIONS"},
+        {CARSLOTID_BODY, CUSTOM_PAINT_SLOT_BODY, "~CUST_SLOT_BODY"},
+        {CARSLOTID_HOOD, CUSTOM_PAINT_SLOT_HOOD, "~CUST_SLOT_HOOD"},
+        {CARSLOTID_BUMPER_FRONT, CUSTOM_PAINT_SLOT_BUMPER_FRONT, "~CUST_REGION_FRONT_BUMPER"},
+        {CARSLOTID_WHEEL_FRONT, CUSTOM_PAINT_SLOT_RIMS_FRONT, "~CUST_SLOT_FRONT_WHEELS"},
+        {CARSLOTID_WHEEL_REAR, CUSTOM_PAINT_SLOT_RIMS_REAR, "~CUST_SLOT_REAR_WHEELS"},
+        {CARSLOTID_BUMPER_REAR, CUSTOM_PAINT_SLOT_BUMPER_REAR, "~CUST_REGION_REAR_BUMPER"},
+        {CARSLOTID_SPOILER, CUSTOM_PAINT_SLOT_SPOILER, "~CUST_SLOT_SPOILER"},
+        {CARSLOTID_ROLL_CAGE, CUSTOM_PAINT_SLOT_ROLLCAGE, "Roll cage"},
+        {CARSLOTID_SKIRT_LEFT, CUSTOM_PAINT_SLOT_SIDESKIRT, "Side skirts" },
+        {CARSLOTID_SIDEMIRROR_LEFT, CUSTOM_PAINT_SLOT_MIRROR, "Mirrors"},
+        {CARSLOTID_WINDOW_FRONT, CUSTOM_PAINT_SLOT_WINDOW_TINT, "Windows"}
+    };
 
 
 
@@ -4183,14 +4787,7 @@ namespace ucetesting {
         using namespace brokenIdleCam;
         using namespace misc;
 
-
-        modscript.open("generated.nfsms", std::ios_base::app | std::ios_base::out);
-
-        std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto time_buf = new char[26];
-        ctime_s(time_buf, 26, &time);
-
-        modscript << "\n#Generated script during session from " << time_buf << "\nThis script may not work as is!\n";
+        AttribEditor::InitHashMaps();
 
         //loading screen quotes randomizer (BROKEN)
         switch (entry) {
@@ -4216,44 +4813,18 @@ namespace ucetesting {
             //utils::jump(0x005b5192, FECarsShopMenuDetour);
             //FECarsShopMenuDetourReturn = 0x005b52de;
 
-            //UserProfile_Player1 = (DWORD*)0x00d8e1a4;
-
             //FUN_addCarToRegion_00518220 = (void(__fastcall*)(DWORD this_, DWORD unaff, DWORD, SavegameCar*)) 0x0052e050;
-            //FUN_load_carlist_00506a80 = FUN_load_carlist_fixup_1_0;
-            //vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x00466bb0;
-            //FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x00464c60;
-            //vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x00464c80;
-            //FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x00463020;
-            //vltget_pvehicle_00451d40 = vltget_pvehicle_00451d40_fixup_1_0;
-            //vltget_frontend_005019b0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00466b20;
             //FUN_00507030 = (bool(__fastcall*)(DWORD * this_)) 0x0051d340;
-            //getVltValuePointer_0045e7d0 = (DWORD(__fastcall*)(DWORD * this_, DWORD unaff, DWORD field, DWORD arrayIndex)) 0x004649b0;
-            //FUN_0045cbe0 = (DWORD(__fastcall*)(DWORD * this_)) 0x00462d20;
             //SavegameCar_update_00507610 = (void(__fastcall*)(SavegameCar * this_)) 0x0051d7c0;
-            //FUN_vltnode_clearFromMem_00462550 = (void(__fastcall*)(DWORD * this_)) 0x00468820;
-            //FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x00468bc0;
         }
             break;
 
         case UC_1_21: //UC 1.0.1.18
 
         {
-            UserProfile_Player1 = (DWORD*)0x0129ea64;
-
-            FUN_addCarToRegion_00518220 = (void(__fastcall*)(DWORD this_, DWORD unaff, DWORD, FECarRecord*)) 0x00518220;
-            FUN_load_carlist_00506a80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00506a80;
-            vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x004609a0;
-            FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x0045ea80;
-            vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x0045eaa0;
-            FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x0045ced0;
-            vltget_pvehicle_00451d40 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00451d40;
-            vltget_frontend_005019b0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x005019b0;
-            FUN_00507030 = (bool(__fastcall*)(DWORD * this_)) 0x00507030;
-            getVltValuePointer_0045e7d0 = (DWORD(__fastcall*)(DWORD * this_, DWORD unaff, DWORD field, DWORD arrayIndex))0x0045e7d0;
-            FUN_0045cbe0 = (DWORD(__fastcall*)(DWORD * this_)) 0x0045cbe0;
-            SavegameCar_update_00507610 = (void(__fastcall*)(FECarRecord * this_)) 0x00507610;
-            FUN_vltnode_clearFromMem_00462550 = (void(__fastcall*)(DWORD * this_)) 0x00462550;
-            FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x004628f0;
+            //FUN_addCarToRegion_00518220 = (void(__fastcall*)(DWORD this_, DWORD unaff, DWORD, FECarRecord*)) 0x00518220;
+            //FUN_00507030 = (bool(__fastcall*)(DWORD * this_)) 0x00507030;
+            //SavegameCar_update_00507610 = (void(__fastcall*)(FECarRecord * this_)) 0x00507610;
 
 
 
@@ -4321,47 +4892,6 @@ namespace ucetesting {
 
 
 
-            //IMPLEMENTED IN THE UCE ASI
-    //            utils::call(0x0084bc2a, getHeadlightsTexture);
-    //            //HEADLIGHTS_storage = (char*) *((char*)0x013b32c0); //the game should load the texture there but cant access it ???
-    //
-    //            // REPLACE CARSHADOW VERSION
-    //            utils::jump(0x0084948e, replaceCarshadowDetour);
-    //            replaceCarshadowDetourReturn = (void*)0x008494fd;
-    //
-    //            //get raw flare status without damage
-    ////            utils::jump(0x708243, 0x70826c);
-    //            utils::set(0x708243, (char)0xEB); //jmp short
-    //            utils::set(0x708244, (char)0x27); //jmp to 70826c
-    //            utils::jump(0x00708847, getRawFlaresDetour);
-    //
-    //            //link emissive headlights to flare headlights
-    //            utils::nop(0x007612d0, 6); //remove early assembler instruction in cBBFXCar::...
-    //            utils::jump(0x007612ED, setEmissiveLightsDetour);
-    //            setEmissiveLightsDetourReturn = (void*)0x00761300;
-    //            utils::call(0x008491ed, lightsUpdateReplacement); //replace bullshit function
-    //            utils::set<char>(0x0084b01f, 0x00); //fix stuck brakelights on car spawn (might be fixed by my other function anyways)
-    //
-    //            //automatic headlights
-    //            //if (*(float*)(theSunAndSky + 0x70) > 0.09) headlightsOff(); //0x60 = SunColourR / 0x70 = AmbientColourR - thresold to adapt or toggle headlights depending on it or smth
-    //            utils::call(0x006b6e1c, headlightsReplacement);
-    //
-    //            utils::nop(0x0072fca1, 22); //removes the CD drive check and prevents waking up all drives
-    //            utils::nop(0x00693B14, 54); //removes another bootup check "nfsc.exe" / "nfsc_link.exe"
-    //
-    //            utils::jump(0x005b0947, HUDLoadedDetour);
-    //            utils::call(0x005715bc, hashBINImpersonator);
-    //
-    //            utils::call(0x0085a15a, forcePlayerCarDetour);
-
-
-
-
-
-
-
-
-
                 //if (utils::get<char>(0x006b6a44) != 0xc7) cout << "ExOpts detected\n";
 
 
@@ -4389,7 +4919,6 @@ namespace ucetesting {
 
             //restore prints
             {
-
                 //is it ok or does it need to be disabled again
                 utils::jump(0x0090c209, restoreDisabledPrint0); //might also cause random crashes (or not ?)
                 restoreDisabledPrintFixupReturn = (void*)0x0090c213;
@@ -4587,16 +5116,12 @@ namespace ucetesting {
 
 
 
-
-
-
-
             ////utils::nop(0x0057d0db, 6); //remove vinyl color restriction, useless
             //utils::nop(0x0057cdd7, 6); //remove vinyl fullbody restriction
             //utils::nop(0x0057d06e, 2); //remove vinyl mirror restriction
 
             //add items to the vinyl edit menu - entire function replacement
-            utils::call(0x00588519, CreateVinylEditMenu);
+            //utils::call(0x00588519, CreateVinylEditMenu);
 
 
 
@@ -4660,10 +5185,6 @@ namespace ucetesting {
             //utils::set(0x007fed33, MemPool_TS_Size);
 
 
-            //utils::jump(0x005964fc, FECarsShopMenuDetour); //maybee deal with this from somewhere else ? add missing cars upon save load ?
-
-
-
             /*
             * custom parts list
             *
@@ -4700,8 +5221,8 @@ namespace ucetesting {
             */
             //utils::call(0x00595021, LoadAftermarketMenu);
 
-            //utils::call(0x0054e4a5, getSelectedPartID);
-            //utils::call(0x00567c35, getSelectedPartID);
+            //utils::call(0x0054e4a5, GetCurrentSlotID);
+            //utils::call(0x00567c35, GetCurrentSlotID);
 
             //utils::call(0x00588fc3, getPartsList);
 
@@ -4716,6 +5237,9 @@ namespace ucetesting {
             //probably misses an initialization of some kind
             //utils::nop(0x00468799, 2);
             //utils::nop(0x004687a3, 2);
+
+            CSTATEMGR_Base__CreateSFXCTL = utils::call(0x00475068, CSTATEMGR_Base__CreateSFXCTL_wrapper);
+
 
 
 
@@ -4764,28 +5288,55 @@ namespace ucetesting {
 
 
 
-            *(DWORD*)(0x00cbb290) = -1; //PhotoMode menu, normally 0x52
-            *(DWORD*)(0x00cbb038) = 0x52; //DebugCarTest, normally 0x26
+            //*(DWORD*)(0x00cbb290) = -1; //PhotoMode menu, normally 0x52
+            //*(DWORD*)(0x00cbb038) = 0x52; //DebugCarTest, normally 0x26
 
-            utils::call(0x00551399, FeScreenManagerGetScreen_spoof);
-            utils::call(0x005513e8, FeScreenManagerGetScreen_spoof);
-            utils::call(0x00551435, FeScreenManagerGetScreen_spoof);
-            utils::call(0x00551500, FeScreenManagerGetScreen_spoof);
-            utils::call(0x0057931b, FeScreenManagerGetScreen_spoof);
+            //utils::call(0x00551399, FeScreenManagerGetScreen_spoof);
+            //utils::call(0x005513e8, FeScreenManagerGetScreen_spoof);
+            //utils::call(0x00551435, FeScreenManagerGetScreen_spoof);
+            //utils::call(0x00551500, FeScreenManagerGetScreen_spoof);
+            //utils::call(0x0057931b, FeScreenManagerGetScreen_spoof);
 
-            utils::jump(0x00551390, SetDebugCarName2);
-            utils::jump(0x005513e0, SetDebugCarName1);
+            //utils::jump(0x00551390, SetDebugCarName2);
+            //utils::jump(0x005513e0, SetDebugCarName1);
 
-            //*(DWORD*)0x00cbb294 = 0x00b72dd8; //push DebugCarTest string instead of PhotoMode one (PhotoMode is 0x00b72af8)
-            //*(DWORD*)0x00cbb298 = 0x0055ec90; //push DebugCarTest init function instead of PhotoMode one (PhotoMode is 0x0055fe20)
+            ////*(DWORD*)0x00cbb294 = 0x00b72dd8; //push DebugCarTest string instead of PhotoMode one (PhotoMode is 0x00b72af8)
+            ////*(DWORD*)0x00cbb298 = 0x0055ec90; //push DebugCarTest init function instead of PhotoMode one (PhotoMode is 0x0055fe20)
 
-            //*(DWORD*)0x00cbb324 = 0x00b72dd8; //CodeEntry
-            //*(DWORD*)0x00cbb328 = 0x0055ec90;
+            ////*(DWORD*)0x00cbb324 = 0x00b72dd8; //CodeEntry
+            ////*(DWORD*)0x00cbb328 = 0x0055ec90;
 
 
 
             //idle cam
             //CDActionDrive__Update_004d7490 = utils::set(0x00b6f790, CDActionDrive__Update_wrapper);
+
+
+            //utils::nop(0x00855a3a, 5); //allow to have more than 3 removed parts from a presetride -> NO! likely memory stomp
+
+
+            //fe position troles, only moves the car, quite silly
+            //utils::set(0x005d7365, "PB_Monorail");
+            //utils::set(0x005d7389, "PB_Monorail");
+            //utils::set(0x005d739d, "PB_Monorail");
+            //utils::set(0x005d73a9, "PB_Monorail");
+
+
+            utils::set(0x00b7c6cc, FEAftermarketCycleMaterials); //button 2 handler in FEAftermarketStateManager
+
+
+            //troll paint slots
+            utils::set(0x005990f2, allSlots);
+            utils::set(0x005990fc, IM_COUNTOF(allSlots));
+
+            utils::set(0x005990dc, allSlots);
+            utils::set(0x005990e6, IM_COUNTOF(allSlots));
+
+            utils::set(0x0059910e, allSlots);
+            utils::set(0x00599118, IM_COUNTOF(allSlots));
+
+            utils::set(0x0059912e, allSlots);
+            utils::set(0x00599124, IM_COUNTOF(allSlots));
 
         }
             break;
@@ -4798,8 +5349,12 @@ namespace ucetesting {
 
 }
 
-void* Attrib::Instance::GetAttributePointerFromString(_Instance* this_, const char* key, DWORD stuff) {
+void* Attrib::Instance::GetAttributePointerFromString(InstanceBase* this_, const char* key, DWORD stuff) {
     return Attrib::Instance::GetAttributePointer(this_, 0, getVltHash((char*) key), stuff);
+}
+
+int __cdecl return_zero() {
+    return 0;
 }
 
 
@@ -4887,8 +5442,17 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
             timer_world = (int*)0x00da531c;
 
-            Attrib::Gen::zone_visual_style__constructor = (void(__fastcall*)(Attrib::_Instance * this_, DWORD edx, DWORD node, DWORD stuff))0x0084f1b0;
-            Attrib::Instance::GetAttributePointer = (void* (__fastcall*)(Attrib::_Instance * this_, DWORD edx, DWORD key, DWORD stuff))0x004649b0;
+
+
+            Attrib::Instance::destructor = (void(__fastcall*)(Attrib::InstanceBase * this_)) (void(__fastcall*)(DWORD * this_)) 0x00468820;
+            Attrib::Instance::GetAttributePointer = (void* (__fastcall*)(Attrib::InstanceBase * this_, DWORD edx, DWORD key, DWORD stuff))0x004649b;
+
+            Attrib::Gen::pvehicle::constructor = (void(__fastcall*)(Attrib::Gen::pvehicle * this_, DWORD unaff, DWORD, DWORD)) 0x004574e0;
+            Attrib::Gen::frontend::constructor = (void(__fastcall*)(Attrib::Gen::frontend * this_, DWORD unaff, Attrib::RefSpec*, DWORD)) 0x00466b20;
+            Attrib::Gen::zone_visual_style::constructor = (void(__fastcall*)(Attrib::Gen::zone_visual_style * this_, DWORD edx, DWORD node, DWORD stuff))0x0084f1b0;
+            
+            
+            
             Attrib::DefaultDataArea = (void* (__cdecl*)(DWORD length))0x00676490;
             break;
         case UC_1_21: //UC 1.0.1.18
@@ -4921,9 +5485,28 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
             timer_world = (int*)0x012b6450;
 
-            Attrib::Gen::zone_visual_style__constructor = (void(__fastcall*)(Attrib::_Instance * this_, DWORD edx, DWORD node, DWORD stuff))0x00822a40;
-            Attrib::Instance::GetAttributePointer = (void* (__fastcall*)(Attrib::_Instance * this_, DWORD edx, DWORD key, DWORD stuff))0x0045e7d0;
+            Attrib::Instance::constructor = (void(__fastcall *)(Attrib::InstanceBase * this_, DWORD edx, Attrib::Collection * node, DWORD stuff)) 0x0045cb40;
+            Attrib::Instance::destructor = (void(__fastcall*)(Attrib::InstanceBase * this_)) 0x00462550;
+            Attrib::Instance::GetAttributePointer = (void* (__fastcall*)(Attrib::InstanceBase * this_, DWORD edx, DWORD key, DWORD stuff))0x0045e7d0;
+            Attrib::Instance::Contains = (bool(__fastcall*)(Attrib::InstanceBase * this_, DWORD edx, DWORD key))0x0045d840;
+            Attrib::Gen::pvehicle::constructor = (void(__fastcall*)(Attrib::Gen::pvehicle * this_, DWORD unaff, DWORD, DWORD)) 0x00451d40;
+            Attrib::Gen::frontend::constructor = (void(__fastcall*)(Attrib::Gen::frontend * this_, DWORD unaff, Attrib::RefSpec*, DWORD)) 0x005019b0;
+            Attrib::Gen::zone_visual_style::constructor = (void(__fastcall*)(Attrib::Gen::zone_visual_style * this_, DWORD edx, DWORD node, DWORD stuff))0x00822a40;
+            Attrib::Gen::presetride::constructor = (void(__fastcall * )(Attrib::Gen::presetride * this_, DWORD unaff, DWORD, DWORD)) 0x0040e760;
+            Attrib::AddAttribute = (bool(__fastcall*)(Attrib::Collection * this_, DWORD edx, DWORD key, DWORD arraySizeMaybe))0x0045fcd0;
+            Attrib::Class::GetDefinition = (Attrib::Definition * (__cdecl*)(Attrib::Definition * defStart, Attrib::Definition * defEnd, Attrib::Definition * match))0x008e5d10;
             Attrib::DefaultDataArea = (void* (__cdecl*)(DWORD length))0x0065abd0;
+            Attrib::FindCollection = (Attrib::Collection * (__cdecl*)(DWORD clazz, DWORD node, char* nodeName))0x0045e840;
+			Attrib::Collection::GetData = (int (__fastcall*)(Attrib::Collection * this_, DWORD edx, DWORD key, DWORD index))0x0045e4a0;
+            Attrib::Collection::Contains = (bool(__fastcall*)(Attrib::Collection * this_, DWORD edx, DWORD key)) 0x0045d5b0;
+            Attrib::Collection::GetNode = (Attrib::Node* (__fastcall*)(Attrib::Collection* this_, DWORD edx, DWORD key, DWORD * keyptr)) 0x0045d510;
+            Attrib::Collection::AddAttribute = (bool(__fastcall*)(Attrib::Collection* this_, DWORD edx, DWORD key, DWORD arraySize)) 0x0045fcd0;
+            Attrib::Collection::RemoveAttribute = (bool(__fastcall*)(Attrib::Collection* this_, DWORD edx, DWORD key)) 0x00461420;
+            Attrib::Attribute::SetLength = (bool(__fastcall*)(Attrib::Attribute * this_, DWORD edx, DWORD length)) 0x00461aa0;
+            Attrib::Attribute::GetLength = (int(__fastcall*)(Attrib::Attribute* this_)) 0x0045ea80;
+            Attrib::Collection::Get = (Attrib::Attribute* (__fastcall*)(Attrib::Collection* this_, DWORD edx, Attrib::Attribute* storage, Attrib::Instance* inst, DWORD key)) 0x0045fc60;
+
+            //Attrib::Database::GetNextClass = (Attrib::Class* (__fastcall*)(DWORD Database, DWORD edx, DWORD index))0x0045e460;
             break;
         default:
             std::cout << "Unsupported EXE, most tweaks will not be applied.\n";
@@ -5458,14 +6041,31 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 #endif //cars pool increase
 
 #if 1 // verbose
-        if (carsModuleInstalled && Settings::verbose) switch (entry) {
+        if (Settings::verbose) switch (entry) {
+            using namespace Verbose;
         case UC_1_21: //UC 1.0.1.18
-            Verbose::__alloca_probe = (void*)0x0087b250;
-            utils::jump(0x00a07820, Verbose::DebugPrintReplacement);
+            //__alloca_probe = (void*)0x0087b250;
+            utils::jump(0x00a07820, DebugPrintReplacement);
+
+            bReleasePrintf = utils::call(0x004adfc0, bReleasePrintf_ERR); //MemoryPool::VerifyPoolIntegrity
+            utils::call(0x004adfd0, bReleasePrintf_ERR);
+            utils::call(0x004adf9a, bReleasePrintf_ERR);
+            utils::call(0x004adfab, bReleasePrintf_ERR);
+            utils::call(0x004ae010, bReleasePrintf_ERR);
+            utils::call(0x004ae1f0, bReleasePrintf_ERR); //MemoryPool something
+            utils::call(0x005dbe0c, bReleasePrintf_ERR); //Out of FastMem memory
             break;
         case UC_1_0: //UC 1.0
-            Verbose::__alloca_probe = (void*)0x008ae430;
-            utils::jump(0x00a3a580, Verbose::DebugPrintReplacement);
+            //__alloca_probe = (void*)0x008ae430;
+            utils::jump(0x00a3a580, DebugPrintReplacement);
+
+            bReleasePrintf = utils::call(0x004b7f60, bReleasePrintf_ERR); //MemoryPool::VerifyPoolIntegrity
+            utils::call(0x004b7f70, bReleasePrintf_ERR);
+            utils::call(0x004b7f3a, bReleasePrintf_ERR);
+            utils::call(0x004b7f4b, bReleasePrintf_ERR);
+            utils::call(0x004b7f70, bReleasePrintf_ERR);
+            utils::call(0x004b8190, bReleasePrintf_ERR); //MemoryPool something
+            utils::call(0x005f637c, bReleasePrintf_ERR); //Out of FastMem memory
             break;
         }
 #endif //verbose
@@ -5686,8 +6286,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
             utils::call(0x005a99d1, LoadAftermarketMenu);
 
-            utils::call(0x005676a5, getSelectedPartID);
-            utils::call(0x00581545, getSelectedPartID);
+            utils::call(0x005676a5, GetCurrentSlotID);
+            utils::call(0x00581545, GetCurrentSlotID);
 
             utils::call(0x0059f053, getPartsList);
 
@@ -5710,8 +6310,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
             utils::call(0x00595021, LoadAftermarketMenu);
 
-            utils::call(0x0054e4a5, getSelectedPartID);
-            utils::call(0x00567c35, getSelectedPartID);
+            utils::call(0x0054e4a5, GetCurrentSlotID);
+            utils::call(0x00567c35, GetCurrentSlotID);
 
             utils::call(0x00588fc3, getPartsList);
 
@@ -5722,6 +6322,128 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         }
 #endif //FE aftermarket menu
 
+#if 1
+        if (carsModuleInstalled && Settings::ReadCarListFromAttrib) switch (entry) {
+            using namespace FECarList;
+        case UC_1_21:
+            FUN_load_carlist_00506a80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x00506a80;
+            vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x004609a0;
+            FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x0045ea80;
+            vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x0045eaa0;
+            FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x0045ced0;
+            GetCollectionKey_0045cbe0 = (DWORD(__fastcall*)(Attrib::Instance * this_)) 0x0045cbe0;
+            FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x004628f0;
+
+            //FEPlayerCarDB
+            CreateNewCarRecord = (FECarRecord * (__fastcall*)(void*)) 0x0050f220;
+            CreateNewCustomizationRecord = (FECustomizationRecord * (__fastcall*)(void*)) 0x00513880;
+
+            //FECarRecord
+            GetType = (int(__fastcall*)(FECarRecord*)) 0x00507710;
+            FECarRecord__GetNameHash_005079e0 = (DWORD(__cdecl*)(DWORD)) 0x005079e0;
+            FECarRecord__GetManufacturerName_00507d10 = (char* (__cdecl*)(DWORD)) 0x00507d10;
+            FECarRecord__GetManuLogoHash_00502230 = (DWORD(__cdecl*)(char*, bool)) 0x00502230;
+            FUN_005199f0 = (void(__fastcall*)(DWORD*, DWORD edx, DALVehicleCommands::CarInfo*)) 0x005199f0;
+
+            IgnorePlayerUsable_012bb1d8 = (bool*)0x012bb1d8;
+
+            CreateNewCustomCarDetourReturn = 0x005174a6;
+            BuildRideForPlayerDetourReturn = 0x0050fa12;
+
+            utils::set(0x00b71fe4, DALVehicleCommands__GetStockCars__Execute);
+
+            //namespace FEPlayerCarDB
+            utils::jump(0x00501ff0, GetCarRecordByHandle);
+            utils::jump(0x00502030, GetCarRecordByFEKey);
+            utils::jump(0x00502070, GetStockCarRecord);
+            utils::jump(0x005020f0, GetCarByIndex);
+            utils::jump(0x005138d0, CreateCar);
+            utils::jump(0x00517481, CreateNewCustomCarDetour);
+            utils::jump(0x0050f9f0, BuildRideForPlayerDetour);
+
+            utils::jump(0x005107c0, DALFeVehicle__GetCarNameHash);
+            utils::jump(0x00503b80, DALFeVehicle__GetCarHandleByIndex);
+            utils::jump(0x0050a970, DALFeVehicle__GetCarKeyByHandle);
+            utils::jump(0x0050abc0, DALFeVehicle__GetStockCarValue);
+            utils::jump(0x0050ac40, DALFeVehicle__GetCarTier);
+
+            //TODO DALVehicleCommands::GetCheapestStockCar::Execute
+            //necessary in DALVehicleCommands::GetCustomizableCars ?
+            //DALVehicleCommands::GetManufacturerCar::Execute likely unneeded
+
+            utils::call(0x005125e9, GetCarRecordByHandle_safe_wrapper); //fixes undefined behavior causing a crash due to ECX expected unchanged
+
+            if (Settings::RemoveStockCarRecords) utils::jump(0x00513afa, 0x00513c4c); //skips loading the car list in the save
+            if (Settings::Remove20CarLimit) utils::call(0x0054e709, return_zero);
+            break;
+
+        case UC_1_0:
+
+            //OF FUCKING COURSE
+            //IT DOES NOT RECOGNIZE THE CAR RECORD AFTER PURCHASE
+            //WHY
+
+            FUN_load_carlist_00506a80 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD, DWORD)) 0x0051cd90;
+            vlt_loadArray_004609a0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*, DWORD)) 0x00466bb0;
+            FUN_getArraySize_0045ea80 = (short(__fastcall*)(DWORD * this_)) 0x00464c60;
+            vlt_getArrayElement_0045eaa0 = (DWORD * (__fastcall*)(DWORD * this_, DWORD unaff, DWORD)) 0x00464c80;
+            FUN_0045ced0 = (void(__fastcall*)(DWORD * this_, DWORD unaff, DWORD*)) 0x00463020;
+            GetCollectionKey_0045cbe0 = (DWORD(__fastcall*)(Attrib::Instance * this_)) 0x00462d20;
+            FUN_004628f0 = (void(__fastcall*)(DWORD * this_)) 0x00468bc0;
+
+
+
+            //TODO INCORRECT OFFSETS FOR NOW \/ unless ok
+
+
+            //FEPlayerCarDB
+            CreateNewCarRecord = (FECarRecord * (__fastcall*)(void*)) 0x00524d20; //ok
+            CreateNewCustomizationRecord = (FECustomizationRecord * (__fastcall*)(void*)) 0x00528ca0;//ok
+
+            //FECarRecord
+            GetType = (int(__fastcall*)(FECarRecord*)) 0x0051d8c0;//ok
+            FECarRecord__GetNameHash_005079e0 = (DWORD(__cdecl*)(DWORD)) 0x00525070;//ok
+            FECarRecord__GetManufacturerName_00507d10 = (char* (__cdecl*)(DWORD)) 0x0051dca0; //ok
+            FECarRecord__GetManuLogoHash_00502230 = (DWORD(__cdecl*)(char*, bool)) 0x00518550; //ok
+            FUN_005199f0 = (void(__fastcall*)(DWORD*, DWORD edx, DALVehicleCommands::CarInfo*)) 0x0052f570;//ok
+
+            IgnorePlayerUsable_012bb1d8 = (bool*)0x00daa165; //ok
+
+            utils::set(0x00be7420, DALVehicleCommands__GetStockCars__Execute);//ok
+
+
+
+
+
+            //namespace FEPlayerCarDB
+            utils::jump(0x00518310, GetCarRecordByHandle); //ok
+            utils::jump(0x00518350, GetCarRecordByFEKey);//ok
+            utils::jump(0x00518390, GetStockCarRecord); //ok
+            utils::jump(0x00518410, GetCarByIndex);//ok
+            utils::jump(0x00528cf0, CreateCar);//ok
+
+            CreateNewCustomCarDetourReturn = 0x0052d176; //ok
+            BuildRideForPlayerDetourReturn = 0x00524f52; //ok
+            utils::jump(0x0052d151, CreateNewCustomCarDetour); //ok
+            utils::jump(0x00524f30, BuildRideForPlayerDetour); //ok
+
+            utils::jump(0x0052a210, DALFeVehicle__GetCarNameHash);//ok
+            utils::jump(0x00519dc0, DALFeVehicle__GetCarHandleByIndex);
+            utils::jump(0x005203a0, DALFeVehicle__GetCarKeyByHandle);//ok
+            utils::jump(0x00520600, DALFeVehicle__GetStockCarValue);//ok
+            utils::jump(0x00520680, DALFeVehicle__GetCarTier);//ok
+
+            //TODO DALVehicleCommands::GetCheapestStockCar::Execute
+            //necessary in DALVehicleCommands::GetCustomizableCars ?
+            //DALVehicleCommands::GetManufacturerCar::Execute likely unneeded
+
+            utils::call(0x00527989, GetCarRecordByHandle_safe_wrapper); //ok, fixes undefined behavior causing a crash due to ECX expected unchanged
+
+            if (Settings::RemoveStockCarRecords) utils::jump(0x00529551, 0x0052974d); //skips loading the car list in the save
+            if (Settings::Remove20CarLimit) utils::call(0x005678f9, return_zero);
+            break;
+        }
+#endif //FE car list
 
         if (!CarRenderConn::MissShiftEffect) CarRenderConn::MissShiftEffect = getVltHash((char*)"MissShiftEffect");
         if (!CarRenderConn::NOSEffect) CarRenderConn::NOSEffect = getVltHash((char*)"NOSEffect");

@@ -1,0 +1,2451 @@
+#pragma once
+#include <sys/types.h>
+#include "nfs_structs.h"
+#include "MiscGameFuncs.h"
+#include "imgui/imgui.h"
+#include <map>
+#include <ctime>
+#include <fstream>
+#include <chrono>
+
+//GetLocalizedString (EALocalizationManager something)
+//
+
+#define IM_MIN(A, B)            (((A) < (B)) ? (A) : (B))
+#define IM_MAX(A, B)            (((A) >= (B)) ? (A) : (B))
+#define IM_CLAMP(V, MN, MX)     ((V) < (MN) ? (MN) : (V) > (MX) ? (MX) : (V))
+
+namespace AttribEditor {
+    DWORD* DatabasePrivate = (DWORD*)0x01293d90;
+
+
+    std::ofstream modscript;
+    bool modscriptInitialized = false;
+
+    std::map<int, const char*> AttribTypes;
+    std::map<int, const char*> AttribClasses;
+    std::map<int, const char*> AttribCollections;
+    std::map<int, const char*> AttribFields;
+
+    void initializeModscript() {
+        modscript.open("generated.nfsms", std::ios_base::app | std::ios_base::out);
+
+        std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        auto time_buf = new char[26];
+        ctime_s(time_buf, 26, &time);
+
+        modscript << "\n#Generated script during session from " << time_buf << "\n#This script may not work as is!\n";
+
+
+
+
+        //trollingly creating an enum
+        //if (Settings::tests) {
+        //    for (auto& t : AttribTypes) {
+        //        int i = 0;
+        //        char* next = (char*)t.second;
+        //        while (t.second[i] != 0) {
+        //            if (t.second[i] == ':') next = (char*)&t.second[i + 1];
+        //            i++;
+        //        }
+        //        ucetesting::modscript << next << " = 0x" << (DWORD*)t.first << ",\n";
+        //        ucetesting::modscript.flush();
+
+        //    }
+        //}
+
+
+
+
+
+
+        modscriptInitialized = true;
+    }
+
+    void InitHashMaps() {
+        //Fill in hash maps
+                    //addAttribType("EA::Reflection::Int64");
+            //addAttribType("EA::Reflection::Int32");
+            //addAttribType("EA::Reflection::Int16");
+            //addAttribType("EA::Reflection::Int8");
+            //addAttribType("EA::Reflection::UInt64");
+            //addAttribType("EA::Reflection::UInt32");
+            //addAttribType("EA::Reflection::UInt16");
+            //addAttribType("EA::Reflection::UInt8");
+            //addAttribType("EA::Reflection::Char");
+            //addAttribType("EA::Reflection::Bool");
+            //addAttribType("EA::Reflection::Float");
+            //addAttribType("EA::Reflection::Double");
+            //addAttribType("EA::Reflection::Text");
+            //addAttribType("EA::Reflection::Reference");
+            //addAttribType("EA::Reflection::Type");
+            //addAttribType("EA::Reflection::KeyValueAttrib");
+            //addAttribType("Attrib::Blob");
+            //addAttribType("Attrib::RefSpec");
+            //addAttribType("Attrib::Definition");
+            //addAttribType("Attrib::Types::Symbol");
+            //addAttribType("Attrib::Types::Colour");
+            //addAttribType("Attrib::Types::FloatColour");
+            //addAttribType("Attrib::Types::ShaderColour");
+            //addAttribType("Attrib::Types::Matrix");
+            //addAttribType("Attrib::Types::Quaternion");
+            //addAttribType("Attrib::Types::Vector4");
+            //addAttribType("Attrib::Types::Vector3");
+            //addAttribType("Attrib::Types::Vector2");
+
+        std::ifstream inputFile("AttribTypes.txt");
+        std::string line;
+        try {
+            while (std::getline(inputFile, line)) {
+                if (line.empty()) continue;
+                auto arr = new char[line.size() + 1];
+                strncpy_s(arr, line.size() + 1, line.c_str(), line.size());
+                int hash = getVltHash(arr);
+                AttribTypes[hash] = arr;
+            }
+        }
+        catch (std::exception& e) {
+            std::cout << "Error reading AttribTypes.txt: " << e.what() << std::endl;
+        }
+        inputFile.close();
+
+        inputFile.open("AttribClasses.txt");
+        try {
+            while (std::getline(inputFile, line)) {
+                if (line.empty()) continue;
+                auto arr = new char[line.size() + 1];
+                strncpy_s(arr, line.size() + 1, line.c_str(), line.size());
+                int hash = getVltHash(arr);
+                AttribClasses[hash] = arr;
+            }
+        }
+        catch (std::exception& e) {
+            std::cout << "Error reading AttribClasses.txt: " << e.what() << std::endl;
+        }
+        inputFile.close();
+
+        inputFile.open("AttribCollections.txt");
+        try {
+            while (std::getline(inputFile, line)) {
+                if (line.empty()) continue;
+                auto arr = new char[line.size() + 1];
+                strncpy_s(arr, line.size() + 1, line.c_str(), line.size());
+                int hash = getVltHash(arr);
+                AttribCollections[hash] = arr;
+            }
+        }
+        catch (std::exception& e) {
+            std::cout << "Error reading AttribCollections.txt: " << e.what() << std::endl;
+        }
+        inputFile.close();
+
+        inputFile.open("AttribFields.txt");
+        try {
+            while (std::getline(inputFile, line)) {
+                if (line.empty()) continue;
+                auto arr = new char[line.size() + 1];
+                strncpy_s(arr, line.size() + 1, line.c_str(), line.size());
+                int hash = getVltHash(arr);
+                AttribFields[hash] = arr;
+            }
+        }
+        catch (std::exception& e) {
+            std::cout << "Error reading AttribFields.txt: " << e.what() << std::endl;
+        }
+        inputFile.close();
+    }
+
+
+
+
+    void WriteModscriptHeader(char* className, char* collectionName, char* attributeName, int arrayIndex, char* arrayIndexBuf) {
+        modscript << "update_field " << className << " " << collectionName << " " << attributeName << (arrayIndex == -1 ? " " : arrayIndexBuf);
+    }
+
+    static const float one = 1.0f;
+    static const float ten = 10.0f;
+
+
+    static const ImVec4 colorNotExisting{
+        0.6f, 0.2f, 0.2f, 1.0f
+    };
+    static const ImVec4 colorNotSupported{
+        0.6f, 0.5f, 0.2f, 1.0f
+    };
+
+
+
+    void EditRefSpec(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], Attrib::Collection** nextCollection, const char* classText, const char* collectionText, bool displayVltedNames = true)
+    {
+        DWORD* classKey = &((DWORD*)data)[0];
+        DWORD* collectionKey = &((DWORD*)data)[1];
+        DWORD* collectionPtr = &((DWORD*)data)[2];
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        float width = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(width / 3);
+        ImGui::Text(displayVltedNames ? classText : "Class"); ImGui::SameLine(width / 3);
+        ImGui::SetNextItemWidth(width / 3);
+        ImGui::Text(displayVltedNames ? collectionText : "Collection");
+        //static int lastAttribute = 0;
+        static char classKeyBuf[64];
+        static char collectionKeyBuf[100];
+        //if (lastAttribute != def->mKey) {
+        if (AttribClasses[*classKey] != NULL) snprintf(classKeyBuf, sizeof(classKeyBuf), "%s", AttribClasses[*classKey]);
+        else snprintf(classKeyBuf, sizeof(classKeyBuf), "0x%08x", *classKey);
+        if (AttribCollections[*collectionKey] != NULL) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", AttribCollections[*collectionKey]);
+        else snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "0x%08x", *collectionKey);
+        //lastAttribute = def->mKey;
+        //}
+
+        ImGui::PushID(1);
+        ImGui::SetNextItemWidth(width / 3);
+        if (ImGui::InputText("", classKeyBuf, sizeof(classKeyBuf), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (classKeyBuf[0] == '0' && classKeyBuf[1] == 'x') *classKey = strtoul(classKeyBuf, NULL, 16);
+            else *classKey = getVltHash(classKeyBuf);
+            *collectionPtr = (DWORD)Attrib::FindCollection(*classKey, *collectionKey, 0);
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            modscript << classText << " " << classKeyBuf << "\n";
+        }
+        ImGui::PopID();
+        ImGui::PushID(2);
+        //ImGui::SameLine(width/3);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width / 3);
+        if (ImGui::InputText("", collectionKeyBuf, sizeof(collectionKeyBuf), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (collectionKeyBuf[0] == '0' && collectionKeyBuf[1] == 'x') *collectionKey = strtoul(collectionKeyBuf, NULL, 16);
+            else *collectionKey = getVltHash(collectionKeyBuf);
+            *collectionPtr = (DWORD)Attrib::FindCollection(*classKey, *collectionKey, 0);
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            modscript << collectionText << " " << collectionKeyBuf << "\n";
+        }
+        ImGui::PopID();
+        //ImGui::SameLine(2*width/3);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width / 3);
+        if (ImGui::Button("Go to collection")) {
+            *nextCollection = Attrib::FindCollection(*classKey, *collectionKey, 0);
+        }
+    }
+
+    void EditFloatN(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], int count, const char* n...)
+    {
+        const char** names = &n;
+
+        float width = ImGui::CalcItemWidth();
+        for (int i = 1; i < count; i++) {
+            ImGui::Text(names[i - 1]); ImGui::SameLine(width * i / count);
+        }
+        ImGui::Text(names[count - 1]);
+        ImGui::SetNextItemWidth(width);
+        int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)(data), count, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+        for (int i = 0; i < count; i++) {
+            if (result & (i << 0)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << names[i] << " " << ((float*)data)[0] << "\n";
+            }
+        }
+    }
+
+    void EditBStringHash(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool doVltScript = true)
+    {
+        char stringBuf[100];
+        snprintf(stringBuf, sizeof(stringBuf), "0x%08x", *(int*)data);
+
+        float width = ImGui::CalcItemWidth();
+
+        if (dataFieldName != NULL) {
+            ImGui::SetNextItemWidth(width / 5);
+            ImGui::Text(dataFieldName);
+            ImGui::SameLine();
+            ImGui::PushID(dataFieldName);
+            ImGui::SameLine(width / 5);
+        }
+        ImGui::SetNextItemWidth(2 * width / 5);
+        if (ImGui::InputText("", stringBuf, 99, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (stringBuf[0] == '0' && stringBuf[1] == 'x') *(int*)data = strtoul(stringBuf, NULL, 16);
+            else *(int*)data = getBinHash(stringBuf);
+            if (doVltScript) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                if (dataFieldName != NULL) modscript << dataFieldName << " ";
+                modscript << "0x" << (DWORD*)(*(int*)data) << "\n"; //force hash for vlted, else this stupid ass gonn use vlt hashing
+            }
+        }
+        auto localized = getLocalizedString((*(int*)data));
+        if (localized != NULL) {
+            ImGui::SameLine(3 * width / 5);
+            ImGui::Text(localized);
+        }
+
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditInt(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+        if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_S32, (INT32*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(INT32*)data << "\n";
+        }
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditFloat(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+        if (ImGui::InputFloat("", (float*)data)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(float*)data << "\n";
+        }
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditFloatHex(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+        if (ImGui::InputFloat("", (float*)data)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << "0x" << (*(DWORD**)data) << "\n";
+        }
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditByte(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+        if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U8, (UINT8*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << (int)(*(UINT8*)data) << "\n";
+        }
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditText(char** stringVal, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL)
+    {
+        char stringBuf[100];
+
+        //static int lastAttribute = 0;
+        if (stringVal != NULL && *stringVal != NULL) { //&& lastAttribute != def->mKey
+            snprintf(stringBuf, sizeof(stringBuf), *stringVal);
+            //lastAttribute = def->mKey;
+        }
+
+        if (ImGui::InputText("", stringBuf, 99, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            int l = 0;
+            while (stringBuf[l] != 0) l++;
+            *stringVal = new char[l + 1];
+            memcpy_s(*stringVal, l + 1, stringBuf, l + 1);
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *stringVal << "\n";
+        }
+    }
+
+    void EnumCombo(int data, const char* items_separated_by_zeroes, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+
+        float width = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(2 * width / 3);
+        if (ImGui::Combo("##enum", (int*)data, items_separated_by_zeroes)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(UINT32*)data << "\n";
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##enumManual", (int*)data)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(UINT32*)data << "\n";
+        }
+
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EnumFlags(int data, const char* items_separated_by_zeroes, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8])
+    {
+        float width = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(2 * width / 3);
+        bool showFlags = ImGui::TreeNodeEx("Flags", ImGuiTreeNodeFlags_NoTreePushOnOpen);
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##enumManual", (int*)data)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            modscript << *(UINT32*)data << "\n";
+        }
+
+        if (showFlags) {
+            ImGui::TreePush("Flags");
+            int items_count = 0;
+            const char* p = items_separated_by_zeroes;
+            int idx = 0;
+
+            {
+                bool cur = (*(int*)data) & 1 << idx;
+                if (ImGui::Checkbox(p, &cur)) {
+                    if (cur) {
+                        (*(int*)data) |= 1 << idx;
+                    }
+                    else {
+                        (*(int*)data) &= ~(1 << idx);
+                    }
+                }
+                p += ImStrlen(p) + 1;
+
+            }
+
+            while (*p) {
+                bool cur = (*(int*)data) & 1 << idx;
+                if (ImGui::Checkbox(p, &cur)) {
+                    if (cur) {
+                        (*(int*)data) |= 1 << idx;
+                    }
+                    else {
+                        (*(int*)data) &= ~(1 << idx);
+                    }
+                }
+                p += ImStrlen(p) + 1;
+                idx++;
+            }
+
+            ImGui::TreePop();
+        }
+
+    }
+
+    void EnumCombo(int data, const char** items, int count, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+
+        float width = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(2 * width / 3);
+        if (ImGui::Combo("##enum", (int*)data, items, count, count)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(UINT32*)data << "\n";
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##enumManual", (int*)data)) {
+            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
+            modscript << *(UINT32*)data << "\n";
+        }
+
+        if (dataFieldName != NULL) ImGui::PopID();
+    }
+
+    void EditePaintSlot(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "CUSTOM_PAINT_SLOT_BODY\0CUSTOM PAINT_SLOT_RIMS_FRONT\0CUSTOM PAINT_SLOT_RIMS_REAR\0CUSTOM_PAINT_SLOT_ROLLCAGE\0CUSTOM PAINT_SLOT_BUMPER_FRONT\0CUSTOM PAINT_SLOT_BUMPER_REAR\0CUSTOM PAINT_SLOT_SIDESKIRT\0CUSTOM_PAINT_SLOT_HOOD\0CUSTOM PAINT_SLOT_MIRROR\0CUSTOM PAINT_SLOT_SPOILER\0CUSTOM_PAINT_SLOT_WINDOW TINT\0CUSTOM PAINT_SLOT ROOFSCOOP\0MAX_CUSTOM_PAINT_SLOTS\0INVALID_PAINT_SLOT",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+
+    void EditePartMaterialFlags(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "PARTMAT_NONE\0PARTMAT_CARBON\0PARTMAT_CHROME\0PARTMAT_MAGSILVER\0PARTMAT_GLASS\0PARTMAT_GUNMETAL\0PARTMAT_UNUSED3\0PARTMAT_UNUSED4\0PARTMAT_UNUSED5\0NUM_PART_MAT",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+
+    void EditAutosculptRegionID(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "RegionFrontBumper\0RegionRearBumper\0RegionSkirtLeft\0RegionSkirtRight\0RegionRimsFront\0RegionRimsRear\0RegionDoorLeft\0RegionDoorRight\0RegionDoorRearLeft\0RegionDoorRearRight\0RegionFenderFrontLeft\0RegionFenderFrontRight\0RegionBody\0RegionHoods\0RegionSpoilers\0RegionRoofScoops\0RegionRoofHeight\0RegionExhaust\0RegionFrontWindow\0RegionRearWindow\0RegionFrontLeftWindow\0RegionFrontRightWindow\0RegionRearLeftWindow\0RegionRearRightWindow\0RegionLeftDoor\0RegionRightDoor\0RegionInterior\0RegionDoorline\0RegionWindTunnelType1\0RegionWindTunnelType2\0RegionWindTunnelType3\0RegionWindTunnelType4\0RegionWindTunnelType5\0RegionWindTunnelType6\0RegionWindTunnelType7\0RegionWindTunnelType8\0RegionWindTunnelType9\0RegionWindTunnelType10\0RegionRearBumperExtra\0RegionFrontBumperExtra\0RegionNum\0RegionInvalid",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+
+
+    void EditCAR_SLOT_ID(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "CARSLOTID_BADGING_BUMPER_SET_FRONT\0CARSLOTID_BADGING_BUMPER_SET_REAR\0CARSLOTID_BADGING_FENDER_FRONT_LEFT\0CARSLOTID_BADGING_FENDER_FRONT_RIGHT\0CARSLOTID_BADGING_FENDER_REAR_LEFT\0CARSLOTID_BADGING_FENDER_REAR_RIGHT\0CARSLOTID_BADGING_TRUNK\0CARSLOTID_BASE\0CARSLOTID_BODY\0CARSLOTID_BODY_DOORLINE\0CARSLOTID_BRAKE_CALIPER_FRONT\0CARSLOTID_BRAKE_CALIPER_REAR\0CARSLOTID_BRAKE_ROTOR_FRONT\0CARSLOTID_BRAKE_ROTOR_REAR\0CARSLOTID_BRAKELIGHT_GLASS_LEFT\0CARSLOTID_BRAKELIGHT_GLASS_RIGHT\0CARSLOTID_BRAKELIGHT_LEFT\0CARSLOTID_BRAKELIGHT_RIGHT\0CARSLOTID_BUMPER_FRONT\0CARSLOTID_BUMPER_FRONT_EXTRA\0CARSLOTID_BUMPER_REAR\0CARSLOTID_BUMPER_REAR_EXTRA\0CARSLOTID_CHASSIS\0CARSLOTID_DAMAGE_BODY\0CARSLOTID_DAMAGE_BRAKELIGHT_LEFT\0CARSLOTID_DAMAGE_BRAKELIGHT_RIGHT\0CARSLOTID_DAMAGE_BUMPER_FRONT\0CARSLOTID_DAMAGE_BUMPER_REAR\0CARSLOTID_DAMAGE_DOOR_LEFT\0CARSLOTID_DAMAGE_DOOR_REAR_LEFT\0CARSLOTID_DAMAGE_DOOR_REAR_RIGHT\0CARSLOTID_DAMAGE_DOOR_RIGHT\0CARSLOTID_DAMAGE_FENDER_FRONT_LEFT\0CARSLOTID_DAMAGE_FENDER_FRONT_RIGHT\0CARSLOTID_DAMAGE_HEADLIGHT_LEFT\0CARSLOTID_DAMAGE_HEADLIGHT_RIGHT\0CARSLOTID_DAMAGE_HOOD\0CARSLOTID_DAMAGE_SIDEMIRROR_LEFT\0CARSLOTID_DAMAGE_SIDEMIRROR_RIGHT\0CARSLOTID_DAMAGE_TRUNK\0CARSLOTID_DAMAGE_TRUNK911\0CARSLOTID_DAMAGE_WIDEBODY\0CARSLOTID_DAMAGE_WIDEBODY_BUMPER_FRONT\0CARSLOTID_DAMAGE_WIDEBODY_BUMPER_REAR\0CARSLOTID_DAMAGE_WIDEBODY_DOOR_LEFT\0CARSLOTID_DAMAGE_WIDEBODY_DOOR_REAR_LEFT\0CARSLOTID_DAMAGE_WIDEBODY_DOOR_REAR_RIGHT\0CARSLOTID_DAMAGE_WIDEBODY_DOOR_RIGHT\0CARSLOTID_DAMAGE_WIDEBODY_FENDER_FRONT_LEFT\0CARSLOTID_DAMAGE_WIDEBODY_FENDER_FRONT_RIGHT\0CARSLOTID_DAMAGE_WINDOW_FRONT\0CARSLOTID_DAMAGE_WINDOW_FRONT_LEFT\0CARSLOTID_DAMAGE_WINDOW_FRONT_RIGHT\0CARSLOTID_DAMAGE_WINDOW_REAR\0CARSLOTID_DAMAGE_WINDOW_REAR_LEFT\0CARSLOTID_DAMAGE_WINDOW_REAR_RIGHT\0CARSLOTID_DECAL_FRONT_WINDOW\0CARSLOTID_DECAL_REAR_WINDOW\0CARSLOTID_DOOR_LEFT\0CARSLOTID_DOOR_REAR_LEFT\0CARSLOTID_DOOR_REAR_RIGHT\0CARSLOTID_DOOR_RIGHT\0CARSLOTID_DOORHANDLE_FRONT_LEFT\0CARSLOTID_DOORHANDLE_FRONT_RIGHT\0CARSLOTID_DOORHANDLE_REAR_LEFT\0CARSLOTID_DOORHANDLE_REAR_RIGHT\0CARSLOTID_DRIVER\0CARSLOTID_ENGINE\0CARSLOTID_EXHAUST\0CARSLOTID_EXHAUST_TIPS_CENTER\0CARSLOTID_EXHAUST_TIPS_LEFT\0CARSLOTID_EXHAUST_TIPS_RIGHT\0CARSLOTID_FENDER_FRONT_LEFT\0CARSLOTID_FENDER_FRONT_RIGHT\0CARSLOTID_HEADLIGHT_GLASS_LEFT\0CARSLOTID_HEADLIGHT_GLASS_RIGHT\0CARSLOTID_HEADLIGHT_LEFT\0CARSLOTID_HEADLIGHT_RIGHT\0CARSLOTID_HOOD\0CARSLOTID_LICENSE_PLATE\0CARSLOTID_LIGHTBAR\0CARSLOTID_ROLL_CAGE\0CARSLOTID_ROOF\0CARSLOTID_ROOF_INSIDE\0CARSLOTID_ROOFSCOOP\0CARSLOTID_SEAT_LEFT\0CARSLOTID_SEAT_RIGHT\0CARSLOTID_SIDEMIRROR_LEFT\0CARSLOTID_SIDEMIRROR_RIGHT\0CARSLOTID_SKIRT_LEFT\0CARSLOTID_SKIRT_RIGHT\0CARSLOTID_SPOILER\0CARSLOTID_STEERINGWHEEL\0CARSLOTID_TRUNK\0CARSLOTID_UNIVERSAL_SPOILER_BASE\0CARSLOTID_WHEEL_FRONT\0CARSLOTID_WHEEL_REAR\0CARSLOTID_WINDOW_FRONT\0CARSLOTID_WINDOW_FRONT_LEFT\0CARSLOTID_WINDOW_FRONT_RIGHT\0CARSLOTID_WINDOW_REAR\0CARSLOTID_WINDOW_REAR_LEFT\0CARSLOTID_WINDOW_REAR_RIGHT\0CARSLOTID_BRAKE_PACKAGE\0CARSLOTID_DRIVETRAIN_PACKAGE\0CARSLOTID_ENGINE_PACKAGE\0CARSLOTID_FORCED_INDUCTION_PACKAGE\0CARSLOTID_INTERIOR\0CARSLOTID_LIVERY\0CARSLOTID_NITROUS_PACKAGE\0CARSLOTID_SUSPENSION_PACKAGE\0CARSLOTID_TIRE_FRONT\0CARSLOTID_TIRE_PACKAGE\0CARSLOTID_TIRE_REAR\0CARSLOTID_VECTORVINYL",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+    void EditCAR_PART_ID(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "CARPARTID_BADGING_BUMPER_SET_FRONT\0CARPARTID_BADGING_BUMPER_SET_REAR\0CARPARTID_BADGING_FENDER_FRONT_LEFT\0CARPARTID_BADGING_FENDER_FRONT_RIGHT\0CARPARTID_BADGING_FENDER_REAR_LEFT\0CARPARTID_BADGING_FENDER_REAR_RIGHT\0CARPARTID_BADGING_TRUNK\0CARPARTID_BASE\0CARPARTID_BODY\0CARPARTID_BODY_DOORLINE\0CARPARTID_BRAKE\0CARPARTID_BRAKELIGHT_GLASS_LEFT\0CARPARTID_BRAKELIGHT_GLASS_RIGHT\0CARPARTID_BRAKELIGHT_LEFT\0CARPARTID_BRAKELIGHT_RIGHT\0CARPARTID_BRAKEROTOR\0CARPARTID_BUMPER_FRONT\0CARPARTID_BUMPER_FRONT_EXTRA\0CARPARTID_BUMPER_REAR\0CARPARTID_BUMPER_REAR_EXTRA\0CARPARTID_CHASSIS\0CARPARTID_DAMAGE_BODY\0CARPARTID_DAMAGE_BRAKELIGHT_LEFT\0CARPARTID_DAMAGE_BRAKELIGHT_RIGHT\0CARPARTID_DAMAGE_BUMPER_FRONT\0CARPARTID_DAMAGE_BUMPER_REAR\0CARPARTID_DAMAGE_DOOR_LEFT\0CARPARTID_DAMAGE_DOOR_REAR_LEFT\0CARPARTID_DAMAGE_DOOR_REAR_RIGHT\0CARPARTID_DAMAGE_DOOR_RIGHT\0CARPARTID_DAMAGE_FENDER_FRONT_LEFT\0CARPARTID_DAMAGE_FENDER_FRONT_RIGHT\0CARPARTID_DAMAGE_HEADLIGHT_LEFT\0CARPARTID_DAMAGE_HEADLIGHT_RIGHT\0CARPARTID_DAMAGE_HOOD\0CARPARTID_DAMAGE_SIDEMIRROR_LEFT\0CARPARTID_DAMAGE_SIDEMIRROR_RIGHT\0CARPARTID_DAMAGE_TRUNK\0CARPARTID_DAMAGE_WINDOW_FRONT\0CARPARTID_DAMAGE_WINDOW_FRONT_LEFT\0CARPARTID_DAMAGE_WINDOW_FRONT_RIGHT\0CARPARTID_DAMAGE_WINDOW_REAR\0CARPARTID_DAMAGE_WINDOW_REAR_LEFT\0CARPARTID_DAMAGE_WINDOW_REAR_RIGHT\0CARPARTID_DECAL_FRONT_WINDOW\0CARPARTID_DECAL_REAR_WINDOW\0CARPARTID_DOOR_LEFT\0CARPARTID_DOOR_REAR_LEFT\0CARPARTID_DOOR_REAR_RIGHT\0CARPARTID_DOOR_RIGHT\0CARPARTID_DOORHANDLE_FRONT_LEFT\0CARPARTID_DOORHANDLE_FRONT_RIGHT\0CARPARTID_DOORHANDLE_REAR_LEFT\0CARPARTID_DOORHANDLE_REAR_RIGHT\0CARPARTID_DRIVER\0CARPARTID_ENGINE\0CARPARTID_EXHAUST\0CARPARTID_EXHAUST_TIPS_CENTER\0CARPARTID_EXHAUST_TIPS_LEFT\0CARPARTID_EXHAUST_TIPS_RIGHT\0CARPARTID_FENDER_FRONT_LEFT\0CARPARTID_FENDER_FRONT_RIGHT\0CARPARTID_HEADLIGHT_GLASS_LEFT\0CARPARTID_HEADLIGHT_GLASS_RIGHT\0CARPARTID_HEADLIGHT_LEFT\0CARPARTID_HEADLIGHT_RIGHT\0CARPARTID_HOOD\0CARPARTID_LIGHTBAR\0CARPARTID_PLATES\0CARPARTID_ROLL_CAGE\0CARPARTID_ROOF\0CARPARTID_ROOF_INSIDE\0CARPARTID_ROOFSCOOP\0CARPARTID_SEAT\0CARPARTID_SIDEMIRROR_LEFT\0CARPARTID_SIDEMIRROR_RIGHT\0CARPARTID_SKIRT_LEFT\0CARPARTID_SKIRT_RIGHT\0CARPARTID_SPOILER\0CARPARTID_STEERINGWHEEL\0CARPARTID_TRUNK\0CARPARTID_UNIVERSAL_SPOILER_BASE\0CARPARTID_WHEEL\0CARPARTID_WHEEL_REAR\0CARPARTID_WINDOW_FRONT\0CARPARTID_WINDOW_FRONT_LEFT\0CARPARTID_WINDOW_FRONT_RIGHT\0CARPARTID_WINDOW_REAR\0CARPARTID_WINDOW_REAR_LEFT\0CARPARTID_WINDOW_REAR_RIGHT\0CARPARTID_BRAKE_PACKAGE\0CARPARTID_DRIVETRAIN_PACKAGE\0CARPARTID_ENGINE_PACKAGE\0CARPARTID_FORCED_INDUCTION_PACKAGE\0CARPARTID_INTERIOR\0CARPARTID_LIVERY\0CARPARTID_NITROUS_PACKAGE\0CARPARTID_SUSPENSION_PACKAGE\0CARPARTID_TIRE\0CARPARTID_TIRE_PACKAGE\0CARPARTID_VECTORVINYL\0CARPARTID_NUM",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+
+    void EditTireCondition(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
+    {
+        EnumCombo(data, "kGrip\0kWet\0kFlat\0kDrift\0kDrag",
+            className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
+    }
+
+    void EditAttrib(char* className, char* collectionName, char* attributeName, int data, Attrib::Definition* def, Attrib::Collection* currentCollection, Attrib::Collection** nextCollection, int arrayIndex, bool notAnArray = true) {
+        //Array index -1 = not an array
+        //Array index -2 = array header
+
+        if (notAnArray) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+        }
+        ImGui::AlignTextToFramePadding();
+
+        if (!modscriptInitialized) initializeModscript();
+
+        char arrayIndexBuf[8];
+        snprintf(arrayIndexBuf, sizeof(arrayIndexBuf), "[%d] ", arrayIndex);
+
+        if (notAnArray) ImGui::TextUnformatted((arrayIndex < 0 ? attributeName : arrayIndexBuf));
+        ImGui::TableNextColumn();
+
+        bool supported = true;
+        bool isInCurrentCollection = Attrib::Collection::Contains(currentCollection, 0, def->mKey);
+        if (!isInCurrentCollection) {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, colorNotExisting);
+        }
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+
+        if (data == NULL) {
+            if (!isInCurrentCollection) {
+                //ImGui::SameLine(); ImGui::Text("NOT IN CURRENT COLLECTION");
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::TableNextColumn();
+            //ImGui::SameLine();
+            if (def->mFlags & Attrib::Definition::Flags::kArray) {
+                ImGui::Text("Create local, size=");
+                static int count = 1;
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(20.0f);
+                if (ImGui::InputInt("##arraysize", &count, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    Attrib::Collection::AddAttribute(currentCollection, 0, def->mKey, count);
+                    modscript << "add_field " << className << " " << collectionName << " " << attributeName << " " << count << "\n";
+                }
+            }
+            else
+                if (ImGui::Button("Create")) {
+                    Attrib::Collection::AddAttribute(currentCollection, 0, def->mKey, 0);
+                    modscript << "add_field " << className << " " << collectionName << " " << attributeName << "\n";
+                }
+
+            ImGui::SameLine();
+            if (arrayIndex == -2) ImGui::Text("(array of %s)", AttribTypes[def->mType]);
+            else ImGui::Text("(%s)", AttribTypes[def->mType]);
+
+            return;
+        }
+
+        Attrib::Instance instance;
+        Attrib::Attribute attrib;
+
+        if (arrayIndex == -2) {
+            //RESIZING STUFF
+            // 
+
+
+                //this will require an Instance apparently, go figure why it isn't needed in most other cases
+            Attrib::Instance::constructor(&instance, 0, currentCollection, 0);
+            Attrib::Collection::Get(currentCollection, 0, &attrib, &instance, def->mKey);
+
+            //ImGui::Text("Resize, size=");
+            //static int count = Attrib::Attribute::GetLength(&attrib);
+            //ImGui::SameLine();
+            //ImGui::PushItemWidth(20.0f);
+            //if (ImGui::InputInt("##arrayresize", &count, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            //    Attrib::Attribute::SetLength(&attrib, 0, count); //doesnt work ???
+            //    //modscript << "resize_field " << className << " " << collectionName << " " << attributeName << " " << count << "\n";
+            //}
+            //ImGui::PopItemWidth();
+
+
+            DWORD key = def->mKey;
+            ImGui::Text("Resize, size=");
+            //int count = ((Attrib::Array*)Attrib::Collection::GetNode(currentCollection, 0, key, &key))->mSize;
+            int count = Attrib::Attribute::GetLength(&attrib);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(20.0f);
+            if (ImGui::InputInt("##arrayresize", &count, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                char* oldData = new char[count * def->mSize];
+                for (int i = 0; i < count; i++) {
+                    auto src = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, i);
+                    if (src != NULL) memcpy(oldData + def->mSize * i, src, def->mSize);
+                }
+
+                Attrib::Collection::RemoveAttribute(currentCollection, 0, def->mKey);
+                Attrib::Collection::AddAttribute(currentCollection, 0, def->mKey, count);
+
+                for (int i = 0; i < count; i++) {
+                    auto dst = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, i);
+                    if (dst != NULL) memcpy(dst, oldData + def->mSize * i, def->mSize);
+                }
+                delete[] oldData;
+
+                modscript << "resize_field " << className << " " << collectionName << " " << attributeName << " " << count << "\n";
+            }
+
+
+
+            //use Attrib::Collection::CopyAttribute to initialize new attribute from parent ?
+            //use Attrib::Collection::RemoveAttribute to remove attribute
+
+
+        }
+        else switch (def->mType) {
+        case AttribTypes::Int64:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_S64, (INT64*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(INT64*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::Int32:
+            EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            break;
+
+        case AttribTypes::Int16:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_S16, (INT16*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(INT16*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::Int8:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_S8, (INT8*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << (int)(*(INT8*)data) << "\n";
+            }
+            break;
+
+        case AttribTypes::UInt64:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U64, (UINT64*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(UINT64*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::UInt32:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U32, (UINT32*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(UINT32*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::UInt16:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U16, (UINT16*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(UINT16*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::UInt8:
+            EditByte(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            //if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U8, (UINT8*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+            //    WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            //    modscript << (int)(*(UINT8*)data) << "\n";
+            //}
+            break;
+
+        case AttribTypes::Bool:
+            if (ImGui::Checkbox("", (bool*)data)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << (*(bool*)data ? "True" : "False") << "\n";
+            }
+            break;
+
+        case AttribTypes::Char:
+            if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U8, (char*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(char*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::Float:
+            if (ImGui::InputFloat("", (float*)data, 0.01f, 1.0f, "%.3f", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(float*)data << "\n";
+            }
+            break;
+
+        case AttribTypes::Double:
+            if (ImGui::InputDouble("", (double*)data, 0.01f, 1.0f, "%.6", ImGuiInputTextFlags_AutoSelectAll)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *(double*)data << "\n";
+            }
+            break;
+
+
+        case AttribTypes::Text:
+        {
+            char** stringVal = (char**)data;
+            EditText(stringVal, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+
+        }
+        //ImGui::Text("%s - Text attribute not supported yet", *(char**)data);
+        break;
+
+        case AttribTypes::StringKey:
+        case AttribTypes::StringKey_:
+        {
+            char stringBuf[100];
+
+            DWORD* stringKey = &((DWORD*)data)[0];
+            char** stringVal = (char**)&((DWORD*)data)[1];
+
+            //static int lastAttribute = 0;
+            if (stringVal != NULL && *stringVal != NULL) { //&& lastAttribute != def->mKey
+                snprintf(stringBuf, sizeof(stringBuf), *stringVal);
+                //lastAttribute = def->mKey;
+            }
+
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth * 2.0f / 3.0f);
+            if (ImGui::InputText("", stringBuf, 99, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                //TODO MEMORY LEAK
+                int l = 0;
+                while (stringBuf[l] != 0) l++;
+                *stringVal = new char[l + 1];
+                memcpy_s(*stringVal, l + 1, stringBuf, l + 1);
+                *stringKey = getVltHash(*stringVal);
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << *stringVal << "\n";
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(totalWidth / 3.0f);
+            ImGui::Text("0x%08x", *stringKey); // - Text attribute not supported yet
+        }
+        break;
+
+        case AttribTypes::type_bStringHash:
+        {
+            EditBStringHash(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        }
+        break;
+
+
+
+
+
+
+        case AttribTypes::FloatColour:
+        {
+            int result = ImGui::ColorEdit4("", (float*)data, ImGuiColorEditFlags_AlphaBar);
+            if (result) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "R " << ((float*)data)[0] << "\n";
+                modscript << "G " << ((float*)data)[1] << "\n";
+                modscript << "B " << ((float*)data)[2] << "\n";
+                modscript << "A " << ((float*)data)[3] << "\n";
+            }
+        }
+        break;
+
+        case AttribTypes::Vector4:
+        {
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 4, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            if (result & (1 << 0)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "X " << ((float*)data)[0] << "\n";
+            }
+            if (result & (1 << 1)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "Y " << ((float*)data)[1] << "\n";
+            }
+            if (result & (1 << 2)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "Z " << ((float*)data)[2] << "\n";
+            }
+            if (result & (1 << 3)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "W " << ((float*)data)[3] << "\n";
+            }
+        }
+        break;
+
+        case AttribTypes::Vector3:
+        {
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 3, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            if (result & (1 << 0)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "X " << ((float*)data)[0] << "\n";
+            }
+            if (result & (1 << 1)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "Y " << ((float*)data)[1] << "\n";
+            }
+            if (result & (1 << 2)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "Z " << ((float*)data)[2] << "\n";
+            }
+        }
+        break;
+
+        case AttribTypes::Vector2:
+        {
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 2, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            if (result & (1 << 0)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "X " << ((float*)data)[0] << "\n";
+            }
+            if (result & (1 << 1)) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "Y " << ((float*)data)[1] << "\n";
+            }
+        }
+        break;
+
+        case AttribTypes::Matrix:
+        {
+            for (int i = 0; i < 4; i++) {
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(i);
+                int result = ImGui::InputScalarN("", ImGuiDataType_Float, ((float*)data) + 4 * i, 4, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+                for (int j = 0; j < 4; j++)
+                    if (result & (1 << j)) {
+                        WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                        modscript << "M[" << (i + 1) << "," << (j + 1) << "] " << ((float*)data)[0] << "\n";
+                    }
+                ImGui::PopID();
+            }
+        }
+        break;
+
+
+        case AttribTypes::RefSpec:
+        {
+            //class key
+            //collection key
+            //collection ptr
+            EditRefSpec(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "Class", "Collection");
+        }
+        break;
+
+        case AttribTypes::EffectLinkageRecord:
+        {
+            //3 RefSpec, Surface/Effects/Audio
+            //4 floats, MinSpeed/MaxSpeed, SFXMinSpeed, SFXMaxSpeed
+            ImGui::PushID(1);
+            EditRefSpec(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "SurfaceClassKey", "SurfaceCollectionKey");
+            ImGui::PopID();
+            ImGui::PushID(2);
+            EditRefSpec(data + 12, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "EffectClassKey", "EffectCollectionKey");
+            ImGui::PopID();
+            ImGui::PushID(3);
+            EditRefSpec(data + 24, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "AudioClassKey", "AudioCollectionKey");
+            ImGui::PopID();
+            ImGui::PushID(4);
+            EditFloatN(data + 36, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinSpeed", "MaxSpeed");
+            ImGui::PopID();
+            ImGui::PushID(5);
+            EditFloatN(data + 44, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "SFXMinSpeed", "SFXMaxSpeed");
+            ImGui::PopID();
+
+        }
+        break;
+
+        case TireEffectRecord: {
+            EditTireCondition(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "TireCondition");
+            EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "EmitterClass", "EmitterCollection");
+            EditRefSpec(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "EmitterLowLodClass", "EmitterLowLodCollection");
+            EditFloatN(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinSpeed", "MaxSpeed");
+
+        } break;
+
+        case TireTimeEffectRecord: {
+            EditTireCondition(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "TireCondition");
+            EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "EmitterClass", "EmitterCollection");
+            EditRefSpec(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "EmitterLowLodClass", "EmitterLowLodCollection");
+            EditFloatN(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinTime", "MaxTime");
+        } break;
+
+        case RoadNoiseRecord: {
+            ImGui::PushID(1);
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Frequency", "Amplitude");
+            ImGui::PopID();
+            EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinSpeed", "MaxSpeed");
+        } break;
+
+        case AttribTypes::CarBodyMotion:
+        {
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 3, "DegPerG", "MaxG", "DegPerSec");
+        }
+        break;
+
+        case AttribTypes::AxlePair:
+        {
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Front", "Rear");
+        }
+        break;
+
+        //incomplete, no array resize
+        case AttribTypes::Curve:
+        {
+            auto curve = (struct Curve*)data;
+            ImGui::PushID(1);
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinX", "MaxX");
+            ImGui::PopID();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::PushID(2);
+            EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "MinY", "MaxY");
+            ImGui::PopID();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::PushID(3);
+            EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 1, "GraphScale");
+            ImGui::PopID();
+            if (ImGui::TreeNode("Graph data")) {
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                float width = ImGui::CalcItemWidth() / 3;
+                for (int i = 0; i < curve->X.mLength || i < curve->Y.mLength || i < curve->Y2.mLength; i++) {
+                    ImGui::PushID(i);
+                    ImGui::Text("");
+                    if (i < curve->X.mLength) {
+                        ImGui::PushID(1);
+                        ImGui::SameLine(0);
+                        ImGui::Text("X[%d]", i);
+                        //ImGui::SameLine(20.0f);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(width - 20.0f);
+                        if (ImGui::InputFloat("", &curve->X.mArray[i])) {
+                            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                            modscript << "XValues " << i << " Value " << curve->X.mArray[i] << "\n";
+                        }
+                        ImGui::PopID();
+                    }
+                    if (i < curve->Y.mLength) {
+                        ImGui::PushID(2);
+                        ImGui::SameLine(width);
+                        ImGui::Text("Y[%d]", i);
+                        //ImGui::SameLine(width + 20.0f);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(width - 20.0f);
+                        if (ImGui::InputFloat("", &curve->Y.mArray[i])) {
+                            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                            modscript << "YValues " << i << " Value " << curve->Y.mArray[i] << "\n";
+                        }
+                        ImGui::PopID();
+                    }
+                    if (i < curve->Y2.mLength) {
+                        ImGui::PushID(3);
+                        ImGui::SameLine(2 * width);
+                        ImGui::Text("Y2[%d]", i);
+                        //ImGui::SameLine(2* width + 20.0f);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(width - 20.0f);
+                        if (ImGui::InputFloat("", &curve->Y2.mArray[i])) {
+                            WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                            modscript << "Y2Values " << i << " Value " << curve->Y2.mArray[i] << "\n";
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Curve preview")) {
+                ImGui::Text("better than vlted huh");
+
+                float* xval = new float[curve->X.mLength];
+                float* yval = new float[curve->Y.mLength];
+
+                for (int i = 0; i < curve->X.mLength; i++) {
+                    xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
+                }
+                for (int i = 0; i < curve->Y.mLength; i++) {
+                    yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
+                }
+
+
+                if (ImPlot::BeginPlot("##GraphPreview")) {
+                    ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
+                    //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
+                    //    ImPlotProp_Marker, ImPlotMarker_Square,
+                    //    ImPlotProp_MarkerSize, 6,
+                    //    ImPlotProp_LineColor, GetColormapColor(1),
+                    //    ImPlotProp_FillColor, GetColormapColor(1),
+                    //    ImPlotProp_FillAlpha, 0.25f
+                    //    });
+                    ImPlot::EndPlot();
+                }
+
+                delete[] xval;
+                delete[] yval;
+                ImGui::TreePop();
+            }
+
+        }
+        break;
+
+        case AttribTypes::AxlePairCurve:
+        {
+            auto curve = (struct Curve*)data;
+
+            //this is stupid, doing it that way only because of vlted, all my homies hate vlted
+            if (ImGui::TreeNodeEx("Front", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::PushID(1);
+                EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Front_MinX", "Front_MaxX");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(2);
+                EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Front_MinY", "Front_MaxY");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(3);
+                EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 1, "Front_GraphScale");
+                ImGui::PopID();
+                if (ImGui::TreeNode("Graph data")) {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    float width = ImGui::CalcItemWidth() / 3;
+                    for (int i = 0; i < curve->X.mLength || i < curve->Y.mLength || i < curve->Y2.mLength; i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("");
+                        if (i < curve->X.mLength) {
+                            ImGui::PushID(1);
+                            ImGui::SameLine(0);
+                            ImGui::Text("X[%d]", i);
+                            //ImGui::SameLine(20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->X.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Front_XValues " << i << " Value " << curve->X.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y.mLength) {
+                            ImGui::PushID(2);
+                            ImGui::SameLine(width);
+                            ImGui::Text("Y[%d]", i);
+                            //ImGui::SameLine(width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Front_YValues " << i << " Value " << curve->Y.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y2.mLength) {
+                            ImGui::PushID(3);
+                            ImGui::SameLine(2 * width);
+                            ImGui::Text("Y2[%d]", i);
+                            //ImGui::SameLine(2* width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y2.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Front_Y2Values " << i << " Value " << curve->Y2.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+                if (ImGui::TreeNode("Curve preview")) {
+                    ImGui::Text("better than vlted huh");
+
+                    float* xval = new float[curve->X.mLength];
+                    float* yval = new float[curve->Y.mLength];
+
+                    for (int i = 0; i < curve->X.mLength; i++) {
+                        xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
+                    }
+                    for (int i = 0; i < curve->Y.mLength; i++) {
+                        yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
+                    }
+
+
+                    if (ImPlot::BeginPlot("##GraphPreview")) {
+                        ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
+                        //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
+                        //    ImPlotProp_Marker, ImPlotMarker_Square,
+                        //    ImPlotProp_MarkerSize, 6,
+                        //    ImPlotProp_LineColor, GetColormapColor(1),
+                        //    ImPlotProp_FillColor, GetColormapColor(1),
+                        //    ImPlotProp_FillAlpha, 0.25f
+                        //    });
+                        ImPlot::EndPlot();
+                    }
+
+                    delete[] xval;
+                    delete[] yval;
+                    ImGui::TreePop();
+                }
+
+
+
+
+                ImGui::TreePop();
+            }
+
+            curve = &curve[1]; //switch to rear
+
+            if (ImGui::TreeNodeEx("Rear", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::PushID(1);
+                EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Rear_MinX", "Rear_MaxX");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(2);
+                EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Rear_MinY", "Rear_MaxY");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(3);
+                EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 1, "Rear_GraphScale");
+                ImGui::PopID();
+                if (ImGui::TreeNode("Graph data")) {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    float width = ImGui::CalcItemWidth() / 3;
+                    for (int i = 0; i < curve->X.mLength || i < curve->Y.mLength || i < curve->Y2.mLength; i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("");
+                        if (i < curve->X.mLength) {
+                            ImGui::PushID(1);
+                            ImGui::SameLine(0);
+                            ImGui::Text("X[%d]", i);
+                            //ImGui::SameLine(20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->X.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Rear_XValues " << i << " Value " << curve->X.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y.mLength) {
+                            ImGui::PushID(2);
+                            ImGui::SameLine(width);
+                            ImGui::Text("Y[%d]", i);
+                            //ImGui::SameLine(width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Rear_YValues " << i << " Value " << curve->Y.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y2.mLength) {
+                            ImGui::PushID(3);
+                            ImGui::SameLine(2 * width);
+                            ImGui::Text("Y2[%d]", i);
+                            //ImGui::SameLine(2* width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y2.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Rear_Y2Values " << i << " Value " << curve->Y2.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+                if (ImGui::TreeNode("Curve preview")) {
+                    ImGui::Text("better than vlted huh");
+
+                    float* xval = new float[curve->X.mLength];
+                    float* yval = new float[curve->Y.mLength];
+
+                    for (int i = 0; i < curve->X.mLength; i++) {
+                        xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
+                    }
+                    for (int i = 0; i < curve->Y.mLength; i++) {
+                        yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
+                    }
+
+
+                    if (ImPlot::BeginPlot("##GraphPreview")) {
+                        ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
+                        //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
+                        //    ImPlotProp_Marker, ImPlotMarker_Square,
+                        //    ImPlotProp_MarkerSize, 6,
+                        //    ImPlotProp_LineColor, GetColormapColor(1),
+                        //    ImPlotProp_FillColor, GetColormapColor(1),
+                        //    ImPlotProp_FillAlpha, 0.25f
+                        //    });
+                        ImPlot::EndPlot();
+                    }
+
+                    delete[] xval;
+                    delete[] yval;
+                    ImGui::TreePop();
+                }
+
+
+
+
+                ImGui::TreePop();
+            }
+        }
+        break;
+
+        case AttribTypes::FEPartData:
+        {
+            auto partData = (struct FEPartData*)data;
+            EditBStringHash((int)&partData->HAL_ID, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "HAL_ID");
+            EditBStringHash((int)&partData->CF_HAL_ID, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "CF_HAL_ID");
+            EditInt((int)&partData->price, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Price");
+            EditByte((int)&partData->showroom_unlock, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "ShowroomUnlock");
+            EditInt((int)&partData->tier1_price, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier1Price");
+            EditInt((int)&partData->tier2_price, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier2Price");
+            EditInt((int)&partData->tier3_price, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier3Price");
+            EditInt((int)&partData->tier4_price, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier4Price");
+            EditByte((int)&partData->tier, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier");
+            EditByte((int)&partData->tier_1_showroom_unlock, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier1ShowroomUnlock");
+            EditByte((int)&partData->tier_2_showroom_unlock, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier2ShowroomUnlock");
+            EditByte((int)&partData->tier_3_showroom_unlock, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier3ShowroomUnlock");
+            EditByte((int)&partData->tier_4_showroom_unlock, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Tier4ShowroomUnlock");
+            EditBStringHash((int)&partData->BrandHALId, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "BrandHALId");
+            EditBStringHash((int)&partData->LogoTextureId, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "LogoTextureId");
+            EditBStringHash((int)&partData->DetailHash, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "DetailHash");
+            if (partData->PartDetails != NULL && ImGui::TreeNode("PartDetails")) {
+                EditBStringHash((int)&partData->PartDetails->Logo, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Logo", false); //not in vlt script
+                EditBStringHash((int)&partData->PartDetails->Logo, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Name", false);
+                ImGui::TreePop();
+            }
+            if (partData->OfferID != NULL) ImGui::Text((const char*)partData->OfferID);
+            EditByte((int)&partData->IsOnlineLockable, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "IsOnlineLockable");
+        }
+        break;
+
+        case AttribTypes::CCarSlotEntry:
+        {
+            DWORD dynamicArray = ((DWORD*)data)[0];
+            DWORD arraySize = ((DWORD*)data)[1];
+            char** slotName = &((char**)data)[2];
+
+            EditText(slotName, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Type"); //no vlted that's NOT a type...
+            if (ImGui::TreeNode("Parts")) {
+                for (int i = 0; i < arraySize; i++) {
+                    ImGui::PushID(i);
+                    EditRefSpec(dynamicArray + 12 * i, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "Group", "Name", false); //that's NOT group and name either
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
+
+        }
+        break;
+
+        case AttribTypes::CCarKitSlotEntry:
+        {
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("SlotName"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+
+            EditText((char**)(data + 12), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Type"); //no vlted that's NOT a type...
+            if (ImGui::TreeNodeEx("Part", ImGuiTreeNodeFlags_DefaultOpen)) {
+                EditRefSpec(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "Group", "Name", false); //that's NOT group and name either
+                ImGui::TreePop();
+            }
+        }
+        break;
+
+        case CCarDamageLevels:
+        {
+            ImGui::PushID(1);
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 4, "Speed0", "Speed1", "Speed2", "Influence");
+            ImGui::PopID();
+            ImGui::PushID(2);
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 4, "LightCrack", "LightShatter", "WindowCrack", "WindowSHatter");
+            ImGui::PopID();
+        }
+        break;
+
+        case CCarDamageThreshold:
+        {
+            ImGui::PushID(1);
+            EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 4, "Threshold0", "Threshold1", "Threshold2", "Threshold3");
+            ImGui::PopID();
+            ImGui::PushID(2);
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 4, "DeltaThreshold0", "DeltaThreshold1", "DeltaThreshold2", "DeltaThreshold3");
+            ImGui::PopID();
+        }
+        break;
+
+        case CCarDamageEntry:
+        {
+            auto totalWidth = ImGui::CalcItemWidth();
+            //EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "PartID");
+            EditCAR_PART_ID(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "PartID");
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("AttachPart"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditText((char**)(data + 4), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "AttachPart");
+            ImGui::PushID(1);
+            EditRefSpec(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "MaterialClassKey", "MaterialCollectionKey");
+            ImGui::PopID();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("SmackableCollisionName"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditText((char**)(data + 20), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SmackableCollisionName");
+            ImGui::PushID(2);
+            EditRefSpec(data + 24, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "SmackableCollisionAttributeClassKey", "SmackableCollisionAttributeCollectionKey");
+            ImGui::PopID();
+        }
+        break;
+
+        case CCarDamageMarkerEntry:
+        {
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("MarkerName"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditText((char**)(data + 0), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Name"); //vlted name, proper name
+            //EditInt(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "PartID");
+            EditCAR_PART_ID(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "PartID");
+            //EditInt(data+8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID");
+            EditCAR_SLOT_ID(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID");
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("AttachPart"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditText((char**)(data + 12), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "4"); //vlted name, proper name
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("SmackableCollisionName"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditText((char**)(data + 16), className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "5"); //vlted name, proper name
+            ImGui::PushID(1);
+            EditRefSpec(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "6", "7", false);
+            ImGui::PopID();
+        }
+        break;
+
+        case PresetRidePart:
+        {
+            //EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID");
+            EditCAR_SLOT_ID(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID");
+            EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "PartClassKey", "PartCollectionKey");
+            EditInt(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "KitNumber");
+        }
+        break;
+
+        //TODO bit wonky
+        case PresetRideAutosculpt:
+        {
+            //EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "RegionID");
+            EditAutosculptRegionID(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "RegionID");
+            char buf[10];
+            for (int i = 0; i < 11; i++) {
+                snprintf(buf, sizeof(buf), "Zone%d", i + 1);
+                ImGui::Text("Zone %d", i); ImGui::SameLine();
+                EditFloat(data + 4 + 4 * i, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, buf, false);
+            }
+        }
+        break;
+
+        case PresetRidePaint:
+        {
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("SlotID"); ImGui::SameLine(totalWidth / 2);
+            //ImGui::SetNextItemWidth(totalWidth / 2);
+            //EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "1", false);
+            EditePaintSlot(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "1", false);
+
+            EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "2", "3", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditByte(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "5", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditFloatHex(data + 20, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "6", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Variance"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditFloat(data + 24, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "7", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Flags"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            //EditInt(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "8", false);
+            EditePartMaterialFlags(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "8", false);
+
+        }
+        break;
+
+        case PresetRideRandomPaint: {
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("SlotID"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditePaintSlot(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID", false);
+            //EditInt(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SlotID", false);
+
+            EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "GroupClassKey", "GroupCollectionKey", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditByte(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "5", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditFloat(data + 20, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "6", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Variance"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditFloat(data + 24, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "7", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Flags"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            //EditInt(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "8", false);
+            EditePartMaterialFlags(data + 28, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "8", false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Chance"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditFloat(data + 32, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Chance", false);
+        }
+                                  break;
+
+                                  //VinylsAttrib::VinylLayer
+        case VinylLayer_: {
+            bool edited = false; //vlted doesn't read these properly so need to do things differently here
+
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("PartNameHash"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditBStringHash(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, NULL, false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Mirrored"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::Checkbox("##mirror", (bool*)(data + 4))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("TranslationX"); ImGui::SameLine(totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##tx", ImGuiDataType_S16, (INT16*)(data + 6))) edited = true;
+            ImGui::SameLine(2 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("TranslationY"); ImGui::SameLine(3 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##ty", ImGuiDataType_S16, (INT16*)(data + 8))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Rotation"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::InputScalar("##rot", ImGuiDataType_S8, (INT8*)(data + 10))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("ScaleX"); ImGui::SameLine(totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##sx", ImGuiDataType_S8, (INT8*)(data + 11))) edited = true;
+            ImGui::SameLine(2 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("ScaleY"); ImGui::SameLine(3 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##sy", ImGuiDataType_S8, (INT8*)(data + 12))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("ProportionalScale"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::Checkbox("##proportional", (bool*)(data + 13))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Shear"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::InputScalar("##shear", ImGuiDataType_S8, (INT8*)(data + 14))) edited = true;
+
+            if (ImGui::TreeNode("Color0")) {
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 16))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 17))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 18))) edited = true;
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Color1")) {
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 19))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 20))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 21))) edited = true;
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Color2")) {
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 22))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 23))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 24))) edited = true;
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Color3")) {
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 25))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 26))) edited = true;
+
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
+                ImGui::SetNextItemWidth(totalWidth / 2);
+                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 27))) edited = true;
+                ImGui::TreePop();
+            }
+
+
+            if (edited)  for (int i = 0; i < 7; i++) {
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << (i + 1) << " 0x";
+                modscript << ((DWORD**)data)[i] << "\n";
+            }
+
+        } break;
+
+        case UpgradeSpecs: {
+            EditRefSpec(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "Class", "Collection");
+            EditByte(data + 12, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Level");
+        } break;
+
+                         //enums
+#if 1
+        case ePresetCarFilter: {
+            const char* items[] = { "PRESET_CAR_FILTER_BONUS", "PRESET_CAR_FILTER_CUSTOM", "PRESET_CAR_FILTER_AI", "PRESET_CAR_FILTER_DEBUG" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eDRIVE_BY_TYPE: {
+            const char* items[] = { "DRIVE_BY_UNKNOWN", "DRIVE_BY_TREE", "DRIVE_BY_LAMPPOST", "DRIVE_BY_SMOKABLE", "DRIVE_BY_TUNNEL_IN", "DRIVE_BY_TUNNEL_OUT",
+                "DRIVE_BY_OVERPASS_IN", "DRIVE_BY_OVERPASS_OUT", "DRIVE_BY_AI_CAR", "DRIVE_BY_TRAFFIC", "DRIVE_BY_BRIDGE", "DRIVE_BY_PRE_COL", "DRIVE_BY_CAMERA_BY",
+            "DRIVE_BY_POLE_SKINNY", "DRIVE_BY_SUPPORT_OVERPASS", "DRIVE_BY_BILLBOARD", "DRIVE_BY_STRUCTURE", "DRIVE_BY_STAGING", "DRIVE_BY_TUNNEL_FAN", "DRIVE_BY_LIGHTBULB" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case CubeType: {
+            const char* items[] = { "FILTER0", "TRANSFORMERS", "GONE_IN_60_SECONDS","BOYS_IN_THE_HOOD","INTHEZONE","COPINTRO","LEVELUP","WHITEOVERLAY","COPAPPROACHING","FE" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case KIT_TYPE: {
+            const char* items[] = { "KIT_TYPE_BASE", "KIT_TYPE_STOCK", "KIT_TYPE_AUTOSCULPT", "KIT_TYPE_WIDEBODY" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eInductionType_: {
+            const char* items[] = { "INDUCTION_NONE", "INDUCTION_TURBO_CHARGER", "INDUCTION_ROOTS_BLOWER", "INDUCTION_CENTRIFUGAL_BLOWER", "INDUCTION_TWINSCREW_BLOWER" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case EmitterPostProcessingEffect: {
+            const char* items[] = { "EmitterPostProcessingEffect_NONE", "EmitterPostProcessingEffect_SMOKE" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eSNDCTLSTATE: {
+            const char* items[] = { "SNDSTATE_OFF", "SNDSTATE_PAUSE", "SNDSTATE_INGAME", "SNDSTATE_FE", "SNDSTATE_FE_UPSCREEN","SNDSTATE_FE_SMS_MESSAGE",
+                "SNDSTATE_NIS_STORY","SNDSTATE_NIS_INTRO", "SNDSTATE_NIS_321","SNDSTATE_NIS_BLK","SNDSTATE_NIS_ARREST","SNDSTATE_FMV",
+                "SNDSTATE_STOP_MUSIC","SNDSTATE_GAMESTARTRACE","SNDSTATE_MINILOAD","SNDSTATE_FADEOUT","SNDSTATE_ERROR","SNDSTATE_SYSTEM_HUD","SNDSTATE_NIS_CAM",
+            "SNDSTATE_POSTRACESCREEN", "SNDSTATE_LOADTRANSITION", "SNDSTATE_GENERICDIALOG", "SNDSTATE_NISLOADING", "SNDSTATE_PRERACESCREEN" };
+            EnumCombo(data, items, IM_COUNTOF(items), className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eLiveryID: {
+            EnumCombo(data, "LIVERYID_COP_CAR_MID_05_01\0LIVERYID_COP_CAR_MUS\0LIVERYID_COP_CAR_GTR\0LIVERYID_COP_CAR_POR_911\0LIVERYID_COP_SUV\0LIVERYID_BOSS_CARMEN\0LIVERYID_BOSS_CHASE\0LIVERYID_BOSS_ISF\0LIVERYID_BOSS_NICKEL\0LIVERYID_BOSS_ROSE\0LIVERYID_BOSS_ZACK\0LIVERYID_BOSS_INTRO\0LIVERYID_MEGANE\0LIVERYID_BOSS_GMAC\0LIVERYID_TERLINGUA\0LIVERYID_BOSS_HECTOR\0LIVERYID_DCAST_GT2\0LIVERYID_DCAST_R8\0LIVERYID_DCAST CAMARO\0LIVERYID_DCAST_CHARGER\0LIVERYID_DCAST_VIPER\0LIVERYID_DCAST MUSTANG\0LIVERYID_DCAST_MURCIELAGO\0LIVERYID_DCAST ISF\0LIVERYID_DCAST_MPS3\0LIVERYID_DCAST_GTO\0LIVERYID_DCAST_GTR\0LIVERYID_DCAST 911 TURBO\0LIVERYID_DCAST_GOLF\0LIVERYID_DCAST CAMARO2\0LIVERYID_BOSS_ROSES",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case VinylFinish: {
+            EnumCombo(data, "VinylFinishMatte\0VinylFinishGloss\0VinylFinishChrome",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case COLLISIONSFX_LAYERS: {
+            EnumCombo(data, "unaff\0LAYER_CORE\0LAYER_ZONE\0LAYER_SURFACE\0LAYER_OBJECT\0LAYER_SWEETENERS\0LAYER_SCRAPE",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case ePaintSlot: {
+            EditePaintSlot(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Splicer_Collision_Core: {
+            EnumCombo(data, "Cor_Side_Lit_01\0Cor_Side_Lit_02\0Cor_Side_Lit_03\0Cor_Side_Lit_04\0Cor_Side_Lit_05\0Cor_Side_Med_01\0Cor_Side_Med_02\0Cor_Side_Med_03\0Cor_Side_Med_04\0Cor_Side_Med_05\0Cor_Side_Hard_01\0Cor_Side_Hard_02\0Cor_Side_Hard_03\0Cor_Side_Hard_04\0Cor_Side_Hard_05\0Cor_Side_Fatal_01\0Cor_Side_Fatal_02\0Cor_Side_Fatal_03\0Cor_Side_Fatal_04\0Cor_Side_Fatal_05\0Cor_Frnt_Lit_01\0Cor_Frnt_Lit_02\0Cor_Frnt_Lit_03\0Cor_Frnt_Lit_04\0Cor_Frnt_Lit_05\0Cor_Frnt_Med_01\0Cor_Frnt_Med_02\0Cor_Frnt_Med_03\0Cor_Frnt_Med_04\0Cor_Frnt_Med_05\0Cor_Frnt_Hard_01\0Cor_Frnt_Hard_02\0Cor_Frnt_Hard_03\0Cor_Frnt_Hard_04\0Cor_Frnt_Hard_05\0Cor_Frnt_Fatal_01\0Cor_Frnt_Fatal_02\0Cor_Frnt_Fatal_03\0Cor_Frnt_Fatal_04\0Cor_Frnt_Fatal_05\0Cor_Bot_Lit_01\0Cor_Bot_Lit_02\0Cor_Bot_Lit_03\0Cor_Bot_Lit_04\0Cor_Bot_Lit_05\0Cor_Bot_Med_01\0Cor_Bot_Med_02\0Cor_Bot_Med_03\0Cor_Bot_Hard_01\0Cor_Bot_Hard_02\0Cor_Bot_Hard_03",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Splicer_Collision_Object: {
+            const char* items[] = { "none", "bbq_00", "bbq_00_v00", "bbq_00_v01", "bbq_00_v02", "bbq_01", "bbq_01_v00", "bbq_01_v01", "bbq_01_v02", "bus_sign_00", "bus_sign_00_v00", "bus_sign_00_v01", "bus_sign_00_v02", "bus_sign_01", "bus_sign_01_v00", "bus_sign_01_v01", "bus_sign_01_v02", "busstop_00", "busstop_00_v00", "busstop_00_v01", "busstop_00_v02", "busstop_01", "busstop_01_v00", "busstop_01_v01", "busstop_01_v02", "busstop_02", "busstop_02_v00", "busstop_02_v01", "busstop_02_v02", "car_bumper_00", "car_bumper_00_v00", "car_bumper_00_v01", "car_bumper_00_v02", "car_bumper_01", "car_bumper_01_v00", "car_bumper_01_v01", "car_bumper_01_v02", "car_coplights_00", "car_coplights_00_v00", "car_coplights_00_v01", "car_coplights_00_v02", "car_coplights_01", "car_coplights_01_v00", "car_coplights_01_v01", "car_coplights_01_v02", "car_door_00", "car_door_00_v00", "car_door_00_v01", "car_door_00_v02", "car_door_01", "car_door_01_v00", "car_door_01_v01", "car_door_01_v02", "cardboard_00", "cardboard_00_v00", "cardboard_00_v01", "cardboard_00_v02", "cardboard_01", "cardboard_01_v00", "cardboard_01_v01", "cardboard_01_v02", "cardboard_02", "cardboard_02_v00", "cardboard_02_v01", "cardboard_02_v02", "casinobreak_00", "casinobreak_00_v00", "casinobreak_00_v01", "casinobreak_00_v02", "casinobreak_01", "casinobreak_01_v00", "casinobreak_01_v01", "casinobreak_01_v02", "chain_link_00", "chain_link_00_v00", "chain_link_00_v01", "chain_link_00_v02", "chain_link_01", "chain_link_01_v00", "chain_link_01_v01", "chain_link_01_v02", "chain_link_02", "chain_link_02_v00", "chain_link_02_v01", "chain_link_02_v02", "conc_barricade_00", "conc_barricade_00_v00", "conc_barricade_00_v01", "conc_barricade_00_v02", "conc_barricade_01", "conc_barricade_01_v00", "conc_barricade_01_v01", "conc_barricade_01_v02", "construction_sign_detach_00", "construction_sign_detach_00_v00", "construction_sign_detach_00_v01", "construction_sign_detach_00_v02", "construction_sign_detach_01", "construction_sign_detach_01_v00", "construction_sign_detach_01_v01", "construction_sign_detach_01_v02", "construction_sign_detach_02", "construction_sign_detach_02_v00", "construction_sign_detach_02_v01", "construction_sign_detach_02_v02", "construction_sign_sml_00", "construction_sign_sml_00_v00", "construction_sign_sml_00_v01", "construction_sign_sml_00_v02", "construction_sign_sml_01", "construction_sign_sml_01_v00", "construction_sign_sml_01_v01", "construction_sign_sml_01_v02", "construction_sign_sml_02", "construction_sign_sml_02_v00", "construction_sign_sml_02_v01", "construction_sign_sml_02_v02", "construction_sign_scrn_00", "construction_sign_scrn_00_v00", "construction_sign_scrn_00_v01", "construction_sign_scrn_00_v02", "construction_sign_scrn_01", "construction_sign_scrn_01_v00", "construction_sign_scrn_01_v01", "construction_sign_scrn_01_v02", "construction_sign_scrn_02", "construction_sign_scrn_02_v00", "construction_sign_scrn_02_v01", "construction_sign_scrn_02_v02", "control_panel_stairs_00", "control_panel_stairs_00_v00", "control_panel_stairs_00_v01", "control_panel_stairs_00_v02", "control_panel_stairs_01", "control_panel_stairs_01_v00", "control_panel_stairs_01_v01", "control_panel_stairs_01_v02", "control_panel_stairs_02", "control_panel_stairs_02_v00", "control_panel_stairs_02_v01", "control_panel_stairs_02_v02", "device_box_large_00", "device_box_large_00_v00", "device_box_large_00_v01", "device_box_large_00_v02", "device_box_large_01", "device_box_large_01_v00", "device_box_large_01_v01", "device_box_large_01_v02", "device_box_large_02", "device_box_large_02_v00", "device_box_large_02_v01", "device_box_large_02_v02", "field_marker_00", "field_marker_00_v00", "field_marker_00_v01", "field_marker_00_v02", "field_marker_01", "field_marker_01_v00", "field_marker_01_v01", "field_marker_01_v02", "field_pylon_00", "field_pylon_00_v00", "field_pylon_00_v01", "field_pylon_00_v02", "field_pylon_01", "field_pylon_01_v00", "field_pylon_01_v01", "field_pylon_01_v02", "fire_box_00", "fire_box_00_v00", "fire_box_00_v01", "fire_box_00_v02", "fire_box_01", "fire_box_01_v00", "fire_box_01_v01", "fire_box_01_v02", "fire_box_02", "fire_box_02_v00", "fire_box_02_v01", "fire_box_02_v02", "furniture_cafe_chair_00", "furniture_cafe_chair_00_v00", "furniture_cafe_chair_00_v01", "furniture_cafe_chair_00_v02", "furniture_cafe_chair_01", "furniture_cafe_chair_01_v00", "furniture_cafe_chair_01_v01", "furniture_cafe_chair_01_v02", "furniture_cafe_chair_02", "furniture_cafe_chair_02_v00", "furniture_cafe_chair_02_v01", "furniture_cafe_chair_02_v02", "furniture_cafe_table_00", "furniture_cafe_table_00_v00", "furniture_cafe_table_00_v01", "furniture_cafe_table_00_v02", "furniture_cafe_table_01", "furniture_cafe_table_01_v00", "furniture_cafe_table_01_v01", "furniture_cafe_table_01_v02", "furniture_cafe_table_02", "furniture_cafe_table_02_v00", "furniture_cafe_table_02_v01", "furniture_cafe_table_02_v02", "furniture_cafe_umbrella_00", "furniture_cafe_umbrella_00_v00", "furniture_cafe_umbrella_00_v01", "furniture_cafe_umbrella_00_v02", "furniture_cafe_umbrella_01", "furniture_cafe_umbrella_01_v00", "furniture_cafe_umbrella_01_v01", "furniture_cafe_umbrella_01_v02", "furniture_cafe_umbrella_02", "furniture_cafe_umbrella_02_v00", "furniture_cafe_umbrella_02_v01", "furniture_cafe_umbrella_02_v02", "furniture_couch_00", "furniture_couch_00_v00", "furniture_couch_00_v01", "furniture_couch_00_v02", "furniture_couch_01", "furniture_couch_01_v00", "furniture_couch_01_v01", "furniture_couch_01_v02", "furniture_couch_02", "furniture_couch_02_v00", "furniture_couch_02_v01", "furniture_couch_02_v02", "furniture_cushion_00", "furniture_cushion_00_v00", "furniture_cushion_00_v01", "furniture_cushion_00_v02", "furniture_cushion_01", "furniture_cushion_01_v00", "furniture_cushion_01_v01", "furniture_cushion_01_v02", "furniture_cushion_02", "furniture_cushion_02_v00", "furniture_cushion_02_v01", "furniture_cushion_02_v02", "furniture_lawn_chair_00", "furniture_lawn_chair_00_v00", "furniture_lawn_chair_00_v01", "furniture_lawn_chair_00_v02", "furniture_lawn_chair_01", "furniture_lawn_chair_01_v00", "furniture_lawn_chair_01_v01", "furniture_lawn_chair_01_v02", "furniture_mattress_00", "furniture_mattress_00_v00", "furniture_mattress_00_v01", "furniture_mattress_00_v02", "furniture_mattress_01", "furniture_mattress_01_v00", "furniture_mattress_01_v01", "furniture_mattress_01_v02", "furniture_mattress_02", "furniture_mattress_02_v00", "furniture_mattress_02_v01", "furniture_mattress_02_v02", "garbage_domestic_00", "garbage_domestic_00_v00", "garbage_domestic_00_v01", "garbage_domestic_00_v02", "garbage_domestic_01", "garbage_domestic_01_v00", "garbage_domestic_01_v01", "garbage_domestic_01_v02", "garbage_domestic_02", "garbage_domestic_02_v00", "garbage_domestic_02_v01", "garbage_domestic_02_v02", "garbage_park_00", "garbage_park_00_v00", "garbage_park_00_v01", "garbage_park_00_v02", "garbage_park_01", "garbage_park_01_v00", "garbage_park_01_v01", "garbage_park_01_v02", "garbage_park_02", "garbage_park_02_v00", "garbage_park_02_v01", "garbage_park_02_v02", "goal_post_00", "goal_post_00_v00", "goal_post_00_v01", "goal_post_00_v02", "goal_post_01", "goal_post_01_v00", "goal_post_01_v01", "goal_post_01_v02", "goal_post_02", "goal_post_02_v00", "goal_post_02_v01", "goal_post_02_v02", "hydrant_00", "hydrant_00_v00", "hydrant_00_v01", "hydrant_00_v02", "hydrant_01", "hydrant_01_v00", "hydrant_01_v01", "hydrant_01_v02", "light_plastic_barrel_00", "light_plastic_barrel_00_v00", "light_plastic_barrel_00_v01", "light_plastic_barrel_00_v02", "light_plastic_barrel_01", "light_plastic_barrel_01_v00", "light_plastic_barrel_01_v01", "light_plastic_barrel_01_v02", "light_plastic_barrel_02", "light_plastic_barrel_02_v00", "light_plastic_barrel_02_v01", "light_plastic_barrel_02_v02", "light_wood_00", "light_wood_00_v00", "light_wood_00_v01", "light_wood_00_v02", "mailbox_00", "mailbox_00_v00", "mailbox_00_v01", "mailbox_00_v02", "mailbox_01", "mailbox_01_v00", "mailbox_01_v01", "mailbox_01_v02", "mansion_gate_00", "mansion_gate_00_v00", "mansion_gate_00_v01", "mansion_gate_00_v02", "mansion_gate_01", "mansion_gate_01_v00", "mansion_gate_01_v01", "mansion_gate_01_v02", "metal_bar_large_00", "metal_bar_large_00_v00", "metal_bar_large_00_v01", "metal_bar_large_00_v02", "metal_bar_large_01", "metal_bar_large_01_v00", "metal_bar_large_01_v01", "metal_bar_large_01_v02", "metal_bar_large_02", "metal_bar_large_02_v00", "metal_bar_large_02_v01", "metal_bar_large_02_v02", "metal_bar_medium_00", "metal_bar_medium_00_v00", "metal_bar_medium_00_v01", "metal_bar_medium_00_v02", "metal_bar_medium_01", "metal_bar_medium_01_v00", "metal_bar_medium_01_v01", "metal_bar_medium_01_v02", "metal_bar_small_00", "metal_bar_small_00_v00", "metal_bar_small_00_v01", "metal_bar_small_00_v02", "metal_bar_small_01", "metal_bar_small_01_v00", "metal_bar_small_01_v01", "metal_bar_small_01_v02", "metal_bar_piece_large_00", "metal_bar_piece_large_00_v00", "metal_bar_piece_large_00_v01", "metal_bar_piece_large_00_v02", "metal_bar_piece_large_01", "metal_bar_piece_large_01_v00", "metal_bar_piece_large_01_v01", "metal_bar_piece_large_01_v02", "metal_bar_piece_large_02", "metal_bar_piece_large_02_v00", "metal_bar_piece_large_02_v01", "metal_bar_piece_large_02_v02", "metal_barrel_00", "metal_barrel_00_v00", "metal_barrel_00_v01", "metal_barrel_00_v02", "metal_barrel_01", "metal_barrel_01_v00", "metal_barrel_01_v01", "metal_barrel_01_v02", "metal_barrel_02", "metal_barrel_02_v00", "metal_barrel_02_v01", "metal_barrel_02_v02", "metal_barrel_oil_00", "metal_barrel_oil_00_v00", "metal_barrel_oil_00_v01", "metal_barrel_oil_00_v02", "metal_barrel_oil_01", "metal_barrel_oil_01_v00", "metal_barrel_oil_01_v01", "metal_barrel_oil_01_v02", "metal_barrel_oil_02", "metal_barrel_oil_02_v00", "metal_barrel_oil_02_v01", "metal_barrel_oil_02_v02", "metal_beam_00", "metal_beam_00_v00", "metal_beam_00_v01", "metal_beam_00_v02", "metal_beam_01", "metal_beam_01_v00", "metal_beam_01_v01", "metal_beam_01_v02", "metal_box_large_00", "metal_box_large_00_v00", "metal_box_large_00_v01", "metal_box_large_00_v02", "metal_box_large_01", "metal_box_large_01_v00", "metal_box_large_01_v01", "metal_box_large_01_v02", "metal_box_large_02", "metal_box_large_02_v00", "metal_box_large_02_v01", "metal_box_large_02_v02", "metal_cooler_00", "metal_cooler_00_v00", "metal_cooler_00_v01", "metal_cooler_00_v02", "metal_cooler_01", "metal_cooler_01_v00", "metal_cooler_01_v01", "metal_cooler_01_v02", "metal_crate_00", "metal_crate_00_v00", "metal_crate_00_v01", "metal_crate_00_v02", "metal_crate_01", "metal_crate_01_v00", "metal_crate_01_v01", "metal_crate_01_v02", "metal_dumpster_00", "metal_dumpster_00_v00", "metal_dumpster_00_v01", "metal_dumpster_00_v02", "metal_dumpster_01", "metal_dumpster_01_v00", "metal_dumpster_01_v01", "metal_dumpster_01_v02", "metal_dumpster_02", "metal_dumpster_02_v00", "metal_dumpster_02_v01", "metal_dumpster_02_v02", "metal_frame_large_00", "metal_frame_large_00_v00", "metal_frame_large_00_v01", "metal_frame_large_00_v02", "metal_frame_large_01", "metal_frame_large_01_v00", "metal_frame_large_01_v01", "metal_frame_large_01_v02", "metal_frame_large_02", "metal_frame_large_02_v00", "metal_frame_large_02_v01", "metal_frame_large_02_v02", "metal_frame_medium_00", "metal_frame_medium_00_v00", "metal_frame_medium_00_v01", "metal_frame_medium_00_v02", "metal_frame_medium_01", "metal_frame_medium_01_v00", "metal_frame_medium_01_v01", "metal_frame_medium_01_v02", "metal_frame_medium_02", "metal_frame_medium_02_v00", "metal_frame_medium_02_v01", "metal_frame_medium_02_v02", "metal_frame_small_00", "metal_frame_small_00_v00", "metal_frame_small_00_v01", "metal_frame_small_00_v02", "metal_frame_small_01", "metal_frame_small_01_v00", "metal_frame_small_01_v01", "metal_frame_small_01_v02", "metal_frame_small_02", "metal_frame_small_02_v00", "metal_frame_small_02_v01", "metal_frame_small_02_v02", "metal_panel_large_00", "metal_panel_large_00_v00", "metal_panel_large_00_v01", "metal_panel_large_00_v02", "metal_panel_large_01", "metal_panel_large_01_v00", "metal_panel_large_01_v01", "metal_panel_large_01_v02", "metal_panel_large_02", "metal_panel_large_02_v00", "metal_panel_large_02_v01", "metal_panel_large_02_v02", "metal_panel_medium_00", "metal_panel_medium_00_v00", "metal_panel_medium_00_v01", "metal_panel_medium_00_v02", "metal_panel_medium_01", "metal_panel_medium_01_v00", "metal_panel_medium_01_v01", "metal_panel_medium_01_v02", "metal_panel_medium_02", "metal_panel_medium_02_v00", "metal_panel_medium_02_v01", "metal_panel_medium_02_v02", "metal_panel_small_00", "metal_panel_small_00_v00", "metal_panel_small_00_v01", "metal_panel_small_00_v02", "metal_panel_small_01", "metal_panel_small_01_v00", "metal_panel_small_01_v01", "metal_panel_small_01_v02", "metal_panel_small_02", "metal_panel_small_02_v00", "metal_panel_small_02_v01", "metal_panel_small_02_v02", "metal_pipe_large_00", "metal_pipe_large_00_v00", "metal_pipe_large_00_v01", "metal_pipe_large_00_v02", "metal_pipe_large_01", "metal_pipe_large_01_v00", "metal_pipe_large_01_v01", "metal_pipe_large_01_v02", "metal_pipe_large_02", "metal_pipe_large_02_v00", "metal_pipe_large_02_v01", "metal_pipe_large_02_v02", "metal_pipe_medium_00", "metal_pipe_medium_00_v00", "metal_pipe_medium_00_v01", "metal_pipe_medium_00_v02", "metal_pipe_medium_01", "metal_pipe_medium_01_v00", "metal_pipe_medium_01_v01", "metal_pipe_medium_01_v02", "metal_pipe_medium_02", "metal_pipe_medium_02_v00", "metal_pipe_medium_02_v01", "metal_pipe_medium_02_v02", "metal_pipepiece_large_00", "metal_pipepiece_large_00_v00", "metal_pipepiece_large_00_v01", "metal_pipepiece_large_00_v02", "metal_pipepiece_large_01", "metal_pipepiece_large_01_v00", "metal_pipepiece_large_01_v01", "metal_pipepiece_large_01_v02", "metal_pipepiece_large_02", "metal_pipepiece_large_02_v00", "metal_pipepiece_large_02_v01", "metal_pipepiece_large_02_v02", "metal_slab_large_00", "metal_slab_large_00_v00", "metal_slab_large_00_v01", "metal_slab_large_00_v02", "metal_slab_large_01", "metal_slab_large_01_v00", "metal_slab_large_01_v01", "metal_slab_large_01_v02", "metal_slab_large_02", "metal_slab_large_02_v00", "metal_slab_large_02_v01", "metal_slab_large_02_v02", "milk_crate_00", "milk_crate_00_v00", "milk_crate_00_v01", "milk_crate_00_v02", "milk_crate_01", "milk_crate_01_v00", "milk_crate_01_v01", "milk_crate_01_v02", "milk_crate_02", "milk_crate_02_v00", "milk_crate_02_v01", "milk_crate_02_v02", "newspaper_box_00", "newspaper_box_00_v00", "newspaper_box_00_v01", "newspaper_box_00_v02", "newspaper_box_01", "newspaper_box_01_v00", "newspaper_box_01_v01", "newspaper_box_01_v02", "newspaper_box_02", "newspaper_box_02_v00", "newspaper_box_02_v01", "newspaper_box_02_v02", "parking_arm_00", "parking_arm_00_v00", "parking_arm_00_v01", "parking_arm_00_v02", "parking_arm_01", "parking_arm_01_v00", "parking_arm_01_v01", "parking_arm_01_v02", "parking_arm_02", "parking_arm_02_v00", "parking_arm_02_v01", "parking_arm_02_v02", "parking_meter_00", "parking_meter_00_v00", "parking_meter_00_v01", "parking_meter_00_v02", "parking_meter_01", "parking_meter_01_v00", "parking_meter_01_v01", "parking_meter_01_v02", "parking_meter_02", "parking_meter_02_v00", "parking_meter_02_v01", "parking_meter_02_v02", "pipe_stand_00", "pipe_stand_00_v00", "pipe_stand_00_v01", "pipe_stand_00_v02", "pipe_stand_01", "pipe_stand_01_v00", "pipe_stand_01_v01", "pipe_stand_01_v02", "plastic_barricade_00", "plastic_barricade_00_v00", "plastic_barricade_00_v01", "plastic_barricade_00_v02", "plastic_barricade_01", "plastic_barricade_01_v00", "plastic_barricade_01_v01", "plastic_barricade_01_v02", "plastic_barricade_02", "plastic_barricade_02_v00", "plastic_barricade_02_v01", "plastic_barricade_02_v02", "portapotty_00", "portapotty_00_v00", "portapotty_00_v01", "portapotty_00_v02", "portapotty_01", "portapotty_01_v00", "portapotty_01_v01", "portapotty_01_v02", "portapotty_02", "portapotty_02_v00", "portapotty_02_v01", "portapotty_02_v02", "powerlinestand_00", "powerlinestand_00_v00", "powerlinestand_00_v01", "powerlinestand_00_v02", "powerlinestand_01", "powerlinestand_01_v00", "powerlinestand_01_v01", "powerlinestand_01_v02", "prop_car_heavy_00", "prop_car_heavy_00_v00", "prop_car_heavy_00_v01", "prop_car_heavy_00_v02", "prop_car_heavy_01", "prop_car_heavy_01_v00", "prop_car_heavy_01_v01", "prop_car_heavy_01_v02", "prop_car_heavy_02", "prop_car_heavy_02_v00", "prop_car_heavy_02_v01", "prop_car_heavy_02_v02", "road_cone_00", "road_cone_00_v00", "road_cone_00_v01", "road_cone_00_v02", "road_cone_01", "road_cone_01_v00", "road_cone_01_v01", "road_cone_01_v02", "road_cone_02", "road_cone_02_v00", "road_cone_02_v01", "road_cone_02_v02", "road_pylon_00", "road_pylon_00_v00", "road_pylon_00_v01", "road_pylon_00_v02", "road_pylon_01", "road_pylon_01_v00", "road_pylon_01_v01", "road_pylon_01_v02", "road_pylon_02", "road_pylon_02_v00", "road_pylon_02_v01", "road_pylon_02_v02", "sandwich_board_00", "sandwich_board_00_v00", "sandwich_board_00_v01", "sandwich_board_00_v02", "sandwich_board_01", "sandwich_board_01_v00", "sandwich_board_01_v01", "sandwich_board_01_v02", "sandwich_board_02", "sandwich_board_02_v00", "sandwich_board_02_v01", "sandwich_board_02_v02", "sawhorse_00", "sawhorse_00_v00", "sawhorse_00_v01", "sawhorse_00_v02", "sawhorse_01", "sawhorse_01_v00", "sawhorse_01_v01", "sawhorse_01_v02", "scaffold_light_00", "scaffold_light_00_v00", "scaffold_light_00_v01", "scaffold_light_00_v02", "scaffold_light_01", "scaffold_light_01_v00", "scaffold_light_01_v01", "scaffold_light_01_v02", "shipping_container_00", "shipping_container_00_v00", "shipping_container_00_v01", "shipping_container_00_v02", "shipping_container_01", "shipping_container_01_v00", "shipping_container_01_v01", "shipping_container_01_v02", "shipping_container_02", "shipping_container_02_v00", "shipping_container_02_v01", "shipping_container_02_v02", "shopping_cart_00", "shopping_cart_00_v00", "shopping_cart_00_v01", "shopping_cart_00_v02", "shopping_cart_01", "shopping_cart_01_v00", "shopping_cart_01_v01", "shopping_cart_01_v02", "small_gate_00", "small_gate_00_v00", "small_gate_00_v01", "small_gate_00_v02", "small_gate_01", "small_gate_01_v00", "small_gate_01_v01", "small_gate_01_v02", "small_propanetank_00", "small_propanetank_00_v00", "small_propanetank_00_v01", "small_propanetank_00_v02", "small_propanetank_01", "small_propanetank_01_v00", "small_propanetank_01_v01", "small_propanetank_01_v02", "street_sign_00", "street_sign_00_v00", "street_sign_00_v01", "street_sign_00_v02", "street_sign_01", "street_sign_01_v00", "street_sign_01_v01", "street_sign_01_v02", "ticket_booth_00", "ticket_booth_00_v00", "ticket_booth_00_v01", "ticket_booth_00_v02", "ticket_booth_01", "ticket_booth_01_v00", "ticket_booth_01_v01", "ticket_booth_01_v02", "ticket_booth_02", "ticket_booth_02_v00", "ticket_booth_02_v01", "ticket_booth_02_v02", "traffic_signal_00", "traffic_signal_00_v00", "traffic_signal_00_v01", "traffic_signal_00_v02", "traffic_signal_01", "traffic_signal_01_v00", "traffic_signal_01_v01", "traffic_signal_01_v02", "trash_bag_00", "trash_bag_00_v00", "trash_bag_00_v01", "trash_bag_00_v02", "trash_bag_01", "trash_bag_01_v00", "trash_bag_01_v01", "trash_bag_01_v02", "water_barrier_00", "water_barrier_00_v00", "water_barrier_00_v01", "water_barrier_00_v02", "water_barrier_01", "water_barrier_01_v00", "water_barrier_01_v01", "water_barrier_01_v02", "wooden_bench_00", "wooden_bench_00_v00", "wooden_bench_00_v01", "wooden_bench_00_v02", "wooden_bench_01", "wooden_bench_01_v00", "wooden_bench_01_v01", "wooden_bench_01_v02", "wooden_board_medium_00", "wooden_board_medium_00_v00", "wooden_board_medium_00_v01", "wooden_board_medium_00_v02", "wooden_board_medium_01", "wooden_board_medium_01_v00", "wooden_board_medium_01_v01", "wooden_board_medium_01_v02", "wooden_board_medium_02", "wooden_board_medium_02_v00", "wooden_board_medium_02_v01", "wooden_board_medium_02_v02", "wooden_board_small_00", "wooden_board_small_00_v00", "wooden_board_small_00_v01", "wooden_board_small_00_v02", "wooden_board_small_01", "wooden_board_small_01_v00", "wooden_board_small_01_v01", "wooden_board_small_01_v02", "wooden_board_small_02", "wooden_board_small_02_v00", "wooden_board_small_02_v01", "wooden_board_small_02_v02", "wooden_crate_00", "wooden_crate_00_v00", "wooden_crate_00_v01", "wooden_crate_00_v02", "wooden_crate_01", "wooden_crate_01_v00", "wooden_crate_01_v01", "wooden_crate_01_v02", "wooden_fence_00", "wooden_fence_00_v00", "wooden_fence_00_v01", "wooden_fence_00_v02", "wooden_fence_01", "wooden_fence_01_v00", "wooden_fence_01_v01", "wooden_fence_01_v02", "wooden_pallet_00", "wooden_pallet_00_v00", "wooden_pallet_00_v01", "wooden_pallet_00_v02", "wooden_pallet_01", "wooden_pallet_01_v00", "wooden_pallet_01_v01", "wooden_pallet_01_v02", "wooden_panel_large_00", "wooden_panel_large_00_v00", "wooden_panel_large_00_v01", "wooden_panel_large_00_v02", "wooden_panel_large_01", "wooden_panel_large_01_v00", "wooden_panel_large_01_v01", "wooden_panel_large_01_v02", "wooden_panel_large_02", "wooden_panel_large_02_v00", "wooden_panel_large_02_v01", "wooden_panel_large_02_v02", "wooden_table_00", "wooden_table_00_v00", "wooden_table_00_v01", "wooden_table_00_v02", "wooden_table_01", "wooden_table_01_v00", "wooden_table_01_v01", "wooden_table_01_v02", "wooden_walkway_00", "wooden_walkway_00_v00", "wooden_walkway_00_v01", "wooden_walkway_00_v02", "wooden_walkway_01", "wooden_walkway_01_v00", "wooden_walkway_01_v01", "wooden_walkway_01_v02" };
+            EnumCombo(data, items, IM_COUNTOF(items),
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Splicer_Collision_Surface: {
+            EnumCombo(data, "srf_car_front_lit_01\0srf_car_front_lit_02\0srf_car_front_lit_03\0srf_car_front_med_01\0srf_car_front_med_02\0srf_car_front_med_03\0srf_car_front_hrd_01\0srf_car_front_hrd_02\0srf_car_front_hrd_03\0srf_car_front_hrd_04\0srf_car_front_hrd_05\0srf_conc_front_lit_01\0srf_conc_front_lit_02\0srf_conc_front_lit_03\0srf_conc_front_med_01\0srf_conc_front_med_02\0srf_conc_front_med_03\0srf_conc_front_hrd_01\0srf_conc_front_hrd_02\0srf_conc_front_hrd_03\0srf_asphalt_front_lit_01\0srf_asphalt_front_lit_02\0srf_asphalt_front_lit_03\0srf_asphalt_front_med_01\0srf_asphalt_front_med_02\0srf_asphalt_front_med_03\0srf_asphalt_front_hrd_01\0srf_asphalt_front_hrd_02\0srf_asphalt_front_hrd_03\0srf_dirt_lit_01\0srf_dirt_lit_02\0srf_dirt_lit_03\0srf_dirt_med_01\0srf_dirt_med_02\0srf_dirt_med_03\0srf_dirt_hrd_01\0srf_dirt_hrd_02\0srf_dirt_hrd_03\0srf_grss_lit_01\0srf_grss_lit_02\0srf_grss_lit_03\0srf_grss_med_01\0srf_grss_med_02\0srf_grss_med_03\0srf_grss_hard_01\0srf_grss_hard_02\0srf_grss_hard_03\0srf_grvl_lit_01\0srf_grvl_lit_02\0srf_grvl_lit_03\0srf_grvl_med_01\0srf_grvl_med_02\0srf_grvl_med_03\0srf_grvl_hrd_01\0srf_grvl_hrd_02\0srf_grvl_hrd_03\0srf_rubber_lit_01\0srf_rubber_lit_02\0srf_rubber_lit_03\0srf_rubber_med_01\0srf_rubber_med_02\0srf_rubber_med_03\0srf_rubber_hrd_01\0srf_rubber_hrd_02\0srf_rubber_hrd_03\0srf_metal_lit_01\0srf_metal_lit_02\0srf_metal_lit_03\0srf_metal_med_01\0srf_metal_med_02\0srf_metal_med_03\0srf_metal_hrd_01\0srf_metal_hrd_02\0srf_metal_hrd_03",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case ePaintUsage: {
+            EnumCombo(data, "eBodyPaint\0eVinylPaint\0eRimPaint\0eWindowTint",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eSkyStyle: {
+            EnumCombo(data, "SKY_STYLE_01\0SKY_STYLE_02\0SKY_STYLE_03\0SKY_STYLE_04\0SKY_STYLE_05\0SKY_STYLE_06\0SKY_STYLE_07\0SKY_STYLE_08\0SKY_STYLE_09\0SKY_STYLE_10\0SKY_STYLE_11\0SKY_STYLE_12\0SKY_STYLE_13\0SKY_STYLE_14\0SKY_STYLE_15\0SKY_STYLE_NUM",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eDecalType: {
+            EnumCombo(data, "DECAL_TYPE_SKID_CONCRETE\0DECAL_TYPE_SKID_DIRT\0DECAL_TYPE_SKID_GRASS\0DECAL_TYPE_SKID_SAND\0DECAL_TYPE_SCRAPE_METAL\0DECAL_TYPE_SCRAPE_PLASTIC\0DECAL_TYPE_SCRAPE_WOOD\0DECAL_TYPE_SCRAPE_CONCRETE",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case SURFACE_SFX: {
+            EnumCombo(data, "SURFACE_SFX_NONE\0SURFACE_SFX_LIGHT_CRACK\0unaff\0SURFACE_SFX_TAR_STRIP\0unaff\0SURFACE_SFX_ROADSIDE_PATCH\0SURFACE_SFX_HEAVY_PATCH\0SURFACE_SFX_DIRT\0MAX_SURFACE_SFX",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case SCRAPE_SURFACES: {
+            EnumCombo(data, "SCRAPE_NONE\0SCRAPE_CONCRETE\0SCRAPE_METAL\0SCRAPE_RUBBER\0SCRAPE_OFFROAD",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case SurfaceEffectType: {
+            EnumCombo(data, "kSine\0kSquare\0kTriangle",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case ROLLFX_LOOP: {
+            EnumCombo(data, "ROLLFX_NONE\0ROLLFX_ASPHALT\0ROLLFX_CONCRETE\0ROLLFX_GRASS\0ROLLFX_SAND\0ROLLFX_GRAVEL\0ROLLFX_DIRT\0ROLLFX_SIDEWALK\0ROLLFX_COBBLESTONE\0ROLLFX_BUMPY_HIGHWAY\0ROLLFX_METAL\0ROLLFX_WET_ASPHALT\0ROLLFX_SPIKESTRIP\0MAX_NUM_ROLLFX",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case PartType: {
+            EnumCombo(data, "PartType_CarSpecific\0PartType_Universal\0PartType_UniversalAcrossKits\0PartType_Vinyl\0PartType_Windtunnel\0PartType_Damage\0PartType_DamageSD",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eBustedLevel: {
+            EnumCombo(data, "BUST_LEVEL_CIVIC\0BUST_LEVEL_STATE\0BUST_LEVEL_SUPER_STATE\0BUST_LEVEL_FED\0BUST_LEVEL_SUV\0BUST_LEVEL_INVALID",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eEndTransitionType_: {
+            EnumCombo(data, "END_CAMERA_BLEND\0END_WHITE_FLASH\0END_BLEND_AND_WHITE_FLASH",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eFinishOutcome_: {
+            EnumCombo(data, "FINISH_WIN\0FINISH_LOSE\0FINISH_INVALID",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eOnlineStatus_: {
+            EnumCombo(data, "ONLINE_ONLY\0ONLINE_DISABLED\0ONLINE_DOES_NOT_MATTER",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case ePlayerUnderAIControl_: {
+            EnumCombo(data, "AI_CONTROL_NEVER\0AI_CONTROL_WITH_COLLISIONS\0AI_CONTROL_NO_COLLISIONS",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eRaceType: {
+            EnumCombo(data, "RACE_TYPE_SHORT_FOOTPRINT\0RACE_TYPE_MEDIUM_FOOTPRINT\0RACE_TYPE_LONG_FOOTPRINT\0RACE_TYPE_CHECKPOINT\0RACE_TYPE_HIGHWAY_BATTLE\0RACE_TYPE_OUTRUN\0RACE_TYPE_WANTED_EVENT\0RACE_TYPE_COPS\0RACE_TYPE_ROBBERS\0RACE_TYPE_INVALID",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eSceneRoot_: {
+            EnumCombo(data, "ROOT_WORLD_ORIGIN\0ROOT_PLAYER_CAR_POS\0ROOT_PLAYER_CAR_POS_AT_GROUND_HEIGHT\0ROOT_PLAYER_CAR_POS_ORIENTED_TO_GROUND\0ROOT_PLAYER_CAMERA_POS\0ROOT_PLAYER_CAMERA_POS_AT_GROUND_HEIGHT\0ROOT_PLAYER_CAMERA_POS_ORIENTED_TO_GROUND\0ROOT_BIG_BANG_MARKER\0ROOT_BIG_BANG_MARKER_AT_GROUND_HEIGHT\0ROOT_BIG_BANG_MARKER_ORIENTED_TO_GROUND\0ROOT_TRACK_MARKER\0ROOT_TRACK_MARKER_AT_GROUND_HEIGHT\0ROOT_TRACK_MARKER_ORIENTED_TO_GROUND",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eVehicleCategory: {
+            EnumCombo(data, "VC_PLAYER\0VC_RACER\0VC_COP\0VC_TRAFFIC\0VC_FORCE_PRESET_PLAYER\0VC_FORCE_PRESET_RACER\0VC_FORCE_PRESET_COP\0VC_FORCE_PRESET_TRAFFIC\0VC_COP_BY_THREAT_LEVEL",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case ePerformanceType: {
+            EnumCombo(data, "PERFORMANCE_SIMPLE_TIME_0_TO_100_MPH\0PERFORMANCE_SIMPLE_TIME_0_TO_60_MPH\0PERFORMANCE_SIMPLE_TIME_70_TO_150_MPH\0PERFORMANCE_SIMPLE_TIME_100_TO_0_MPH\0PERFORMANCE_SIMPLE_TIME_60_TO_0_MPH\0PERFORMANCE_SIMPLE_DISTANCE_60_TO_0_MPH\0PERFORMANCE_SIMPLE_DISTANCE_100_TO_0_MPH\0PERFORMANCE_SIMPLE_TIME_QUARTER_MILE\0PERFORMANCE_SIMPLE_SPEED_QUARTER_MILE_MPH\0PERFORMANCE_SIMPLE_TIME_60_FEET\0PERFORMANCE_SIMPLE_TOPSPEED\0PERFORMANCE_SIMPLE_MAX_GS_30_MPH\0PERFORMANCE_SIMPLE_MAX_GS_60_MPH\0PERFORMANCE_SIMPLE_MAX_GS_100_MPH\0PERFORMANCE_SIMPLE_TIME_CORNER_200M_40M_300M\0PERFORMANCE_SIMPLE_DOWNFORCE\0PERFORMANCE_SIMPLE_DRAG\0PERFORMANCE_SIMPLE_FRONT_TOE_30_MPH\0PERFORMANCE_SIMPLE_FRONT_TOE_60_MPH\0PERFORMANCE_SIMPLE_FRONT_TOE_100_MPH\0PERFORMANCE_SIMPLE_CASTER\0PERFORMANCE_SIMPLE_FRONT_WEIGHT_BIAS\0PERFORMANCE_SIMPLE_EBRAKE\0PERFORMANCE_SIMPLE_STEERING_ALIGNMENT_TORQUE\0PERFORMANCE_SIMPLE_AERO_CG\0PERFORMANCE_SIMPLE_ROLL_CENTER\0PERFORMANCE_SIMPLE_SPRING_STIFFNESS\0PERFORMANCE_SIMPLE_SWAYBAR_STIFFNESS\0PERFORMANCE_SIMPLE_SHOCK_DIGRESSION\0PERFORMANCE_SIMPLE_SHOCK_VALVING\0PERFORMANCE_SIMPLE_HORSEPOWER\0PERFORMANCE_SIMPLE_HORSEPOWERRPM\0PERFORMANCE_SIMPLE_PEAKTORQUE\0PERFORMANCE_SIMPLE_PEAKTORQUERPM\0PERFORMANCE_SIMPLE_WEIGHT\0PERFORMANCE_SIMPLE_WEIGHT_TO_POWER_RATIO\0PERFORMANCE_COMPLEX_GRIP\0PERFORMANCE_COMPLEX_TOPSPEED\0PERFORMANCE_COMPLEX_ACCELERATION\0PERFORMANCE_COMPLEX_HANDLING",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case CarClassType: {
+            EnumCombo(data, "CarClassType_Racing\0CarClassType_Cop\0CarClassType_Traffic",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eSFXOBJ_MOMENT_MIXOUT: {
+            EnumCombo(data, "eAZI_MOMENT_3DPOS\0eVOL_MOMENT_PURSUIT_BREAKER\0eFLT_MOMENT_LOWPASSROLLOFF\0eVOL_MOMENT_NIS\0eVOL_MOMENT_CRASH_SWEETNER\0eVOL_MOMENT_SPEED_BREAKER\0eVOL_MOMENT_SPOT_AMBIENCE\0eVOL_MOMENT_MISC_FX\0eVOL_MOMENT_LOADING_MUSIC\0eVOL_MOMENT_DRIVER_JOB\0eVOL_MOMENT_RACE_INTRO\0eVOL_MOMENT_CAUSEWAY\0eVOL_MOMENT_ONLINE\0eVOL_MOMENT_ARRESTS\0eVOL_MOMENT_RADAR\0eVOL_MOMENT_RADAR_INIT\0eVOL_MOMENT_REGIONAL_AMBIENCE\0eVOL_MOMENT_PURSUIT_BREAKER_NIS\0eVOL_MOMENT_TAKEDOWN_CAM",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case eSFXOBJ_MOMENT_MIXINPUT: {
+            EnumCombo(data, "eTRG_MOMENT_SPEED_BREAKER\0eTRG_MOMENT_PURSUIT_BREAKER\0eTRG_MOMENT_NIS\0eTRG_MOMENT_CRASH_SWEETNER\0eTRG_MOMENT_LOADING_MUSIC\0eTRG_MOMENT_MUTE_AI\0eTRG_MOMENT_MUTE_PLAYER\0eTRG_MOMENT_SUDDEN_DEATH_CAM\0eTRG_MOMENT_ROAD_BLOCK_CAM\0eTRG_MOMENT_WIN_OR_LOSE\0eTRG_MOMENT_PURSUIT_BREAKER_NIS\0eTRG_MOMENT_TAKEDOWN_CAM",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case EMomentChokeGroup:
+        case EMomentChokeGroup_: {
+            EnumCombo(data, "eMOMENT_CHOKE_NONE\0eMOMENT_CHOKE_PURSUIT_BREAKER\0eMOMENT_CHOKE_SPEED_BREAKER\0eMOMENT_CHOKE_CRASH_SWEETENER\0eMOMENT_CHOKE_NIS\0eMOMENT_CHOKE_SPOT_AMBIENCE\0eMOMENT_CHOKE_MISC_FX\0eMOMENT_CHOKE_JUMP_CAM\0eMOMENT_CHOKE_LOADING_MUSIC",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case EMomentPanning:
+        case EMomentPanning_: {
+            EnumCombo(data, "eMOMENT_PANNING_NONE\0eMOMENT_PANNING_POINTSOURCE",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Tier: {
+            EnumCombo(data, "kRaceTier_None\0kRaceTier_1\0kRaceTier_2\0kRaceTier_3\0kRaceTier_4\0kRaceTier_NumTiers",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case RaceCarClass:
+        case RaceCarClass_: {
+            EnumCombo(data, "kRaceCar_ClassNone\0kRaceCar_ClassExotic\0kRaceCar_ClassMuscle\0kRaceCar_ClassTuner\0kRaceCar_NumClasses",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case EAIBreakerType: {
+            EnumCombo(data, "BT_NONE\0BT_REAR\0BT_SIDE",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case SPLICE_DAMAGE: {
+            EnumCombo(data, "dmg_hood_lit_01\0dmg_hood_lit_02\0dmg_hood_lit_03\0dmg_hood_lit_04\0dmg_hood_lit_05\0dmg_hood_lit_06\0dmg_hood_med_01\0dmg_hood_med_02\0dmg_hood_med_03\0dmg_hood_hrd_01\0dmg_hood_hrd_02\0dmg_hood_hrd_03\0dmg_bumper_lit_01\0dmg_bumper_lit_02\0dmg_bumper_lit_03\0dmg_bumper_med_01\0dmg_bumper_med_02\0dmg_bumper_med_03\0dmg_bumper_hrd_01\0dmg_bumper_hrd_02\0dmg_bumper_hrd_03\0dmg_panel_lit_01\0dmg_panel_lit_02\0dmg_panel_lit_03\0dmg_panel_med_01\0dmg_panel_med_02\0dmg_panel_med_03\0dmg_panel_hrd_01\0dmg_panel_hrd_02\0dmg_panel_hrd_03\0dmg_roof_lit_01\0dmg_roof_lit_02\0dmg_roof_lit_03\0dmg_roof_med_01\0dmg_roof_med_02\0dmg_roof_med_03\0dmg_roof_hrd_01\0dmg_roof_hrd_02\0dmg_roof_hrd_03\0dmg_door_lit_01\0dmg_door_lit_02\0dmg_door_lit_03\0dmg_door_med_01\0dmg_door_med_02\0dmg_door_med_03\0dmg_door_hrd_01\0dmg_door_hrd_02\0dmg_door_hrd_03\0dmg_frntwind_lit_01\0dmg_frntwind_lit_02\0dmg_frntwind_lit_03\0dmg_frntwind_hrd_01\0dmg_frntwind_hrd_02\0dmg_frntwind_hrd_03\0dmg_sdwind_lit_01\0dmg_sdwind_lit_02\0dmg_sdwind_lit_03\0dmg_sdwind_01\0dmg_sdwind_02\0dmg_sdwind_03\0dmg_sdwind_04\0dmg_sdwind_05\0dmg_hdlight_crack_01\0dmg_hdlight_crack_02\0dmg_hdlight_crack_03\0dmg_hdlight_crack_04\0dmg_hdlight_smash_01\0dmg_hdlight_smash_02\0dmg_hdlight_smash_03\0dmg_hdlight_smash_04\0dmg_hdlight_smash_05",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case CAR_SLOT_ID: {
+            EditCAR_SLOT_ID(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case CAR_PART_ID: {
+            EditCAR_PART_ID(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+                        //CSys types, flag type structure
+        case Type_pursuit_breaker_type: {
+            EnumFlags(data, "Invalid_Type_pursuit_breaker_type\0Type_pursuit_breaker_type_generic\0Type_pursuit_breaker_type_lumbermill\0Type_pursuit_breaker_type_reservior\0Type_pursuit_breaker_type_metal_refinery\0Type_pursuit_breaker_type_quarry\0Type_pursuit_breaker_type_dam\0Type_pursuit_breaker_type_freight_yard\0Type_pursuit_breaker_type_monorail\0Type_pursuit_breaker_type_spillway\0Type_pursuit_breaker_type_construction_site_causeway\0Type_pursuit_breaker_type_rock_wall\0Type_pursuit_breaker_type_gas_station\0Type_pursuit_breaker_type_electrical_tower\0Type_pursuit_breaker_type_crane\0Type_pursuit_breaker_type_interstate_sign\0Type_pursuit_breaker_type_building\0Type_pursuit_breaker_type_heavy_machinery\0Type_pursuit_breaker_type_scaffolding\0Type_pursuit_breaker_type_semi_truck",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Type_car_type: {
+            EnumFlags(data, "Invalid_Type_car_type\0Type_car_type_McLaren\0Type_car_type_Porsche\0Type_car_type_FordGT\0Type_car_type_Viper\0Type_car_type_AstonMartin\0Type_car_type_Corvette\0Type_car_type_BMW\0Type_car_type_Mercedes\0Type_car_type_Audi\0Type_car_type_Mitsubishi\0Type_car_type_Mustang\0Type_car_type_Challenger\0Type_car_type_Camaro\0Type_car_type_GTO\0Type_car_type_Nissan\0Type_car_type_Mazda\0Type_car_type_Lexus\0Type_car_type_Veyron\0Type_car_type_Volkswagen\0Type_car_type_CCX\0Type_car_type_Charger\0Type_car_type_Pagani\0Type_car_type_Lamborghini\0Type_car_type_Shelby\0Type_car_type_Chevelle\0Type_car_type_SportsCar\0Type_car_type_Supra\0Type_car_type_Cadillac\0Type_car_type_Cuda\0Type_car_type_Escort\0Type_car_type_Focus",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+
+        case Type_vo_linenumber: {
+            EnumFlags(data, "Invalid_Type_vo_linenumber\0Type_vo_linenumber_Line01\0Type_vo_linenumber_Line02\0Type_vo_linenumber_Line03\0Type_vo_linenumber_Line04\0Type_vo_linenumber_Line05\0Type_vo_linenumber_Line06\0Type_vo_linenumber_Line07\0Type_vo_linenumber_Line08\0Type_vo_linenumber_Line09\0Type_vo_linenumber_Line10\0Type_vo_linenumber_Line11\0Type_vo_linenumber_Line12\0Type_vo_linenumber_Line13\0Type_vo_linenumber_Line14\0Type_vo_linenumber_Line15\0Type_vo_linenumber_Line16\0Type_vo_linenumber_Line17\0Type_vo_linenumber_Line18\0Type_vo_linenumber_Line19\0Type_vo_linenumber_Line20\0Type_vo_linenumber_Line21\0Type_vo_linenumber_Line22\0Type_vo_linenumber_Line23\0Type_vo_linenumber_Line24\0Type_vo_linenumber_Line25\0Type_vo_linenumber_Line26\0Type_vo_linenumber_Line27\0Type_vo_linenumber_Line28\0Type_vo_linenumber_Line29\0Type_vo_linenumber_Line30\0Type_vo_linenumber_Line31",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+        } break;
+#endif
+
+        default:
+            if (AttribTypes[def->mType] && AttribTypes[def->mType][11] == ':' && AttribTypes[def->mType][20] == 'f' && AttribTypes[def->mType][25] == '_'
+                //&& strncmp("Attrib::Gen::ClassRefSpec_", AttribTypes[def->mType], 26) == 0
+                ) {
+                //dirty check for Attrib::Gen::ClassRefSpec_
+                const char* RefSpecClassName = AttribTypes[def->mType] + 26;
+
+                DWORD* collectionKey = &((DWORD*)data)[0];
+                DWORD* collectionPtr = &((DWORD*)data)[1];
+
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                float width = ImGui::CalcItemWidth();
+                ImGui::SetNextItemWidth(width / 3);
+                ImGui::Text("Class"); ImGui::SameLine(width / 3);
+                ImGui::SetNextItemWidth(width / 3);
+                ImGui::Text("Collection");
+                static char collectionKeyBuf[100];
+
+                if (AttribCollections[*collectionKey] != NULL) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", AttribCollections[*collectionKey]);
+                else snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "0x%08x", *collectionKey);
+
+                ImGui::SetNextItemWidth(width / 3);
+                ImGui::Text(RefSpecClassName);
+                ImGui::PushID(2);
+                ImGui::SameLine(width / 3);
+                ImGui::SetNextItemWidth(width / 3);
+                if (ImGui::InputText("", collectionKeyBuf, sizeof(collectionKeyBuf), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    if (collectionKeyBuf[0] == '0' && collectionKeyBuf[1] == 'x') *collectionKey = strtoul(collectionKeyBuf, NULL, 16);
+                    else *collectionKey = getVltHash(collectionKeyBuf);
+                    *collectionPtr = (DWORD)Attrib::FindCollection(getVltHash((char*)RefSpecClassName), *collectionKey, 0);
+                    WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                    modscript << "Collection" << " " << collectionKeyBuf << "\n";
+                }
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(width / 3);
+                ImGui::SameLine(2 * width / 3);
+                if (ImGui::Button("Go to collection")) {
+                    *nextCollection = Attrib::FindCollection(getVltHash((char*)RefSpecClassName), *collectionKey, 0);
+                }
+
+            }
+            else {
+                supported = false;
+
+                if (isInCurrentCollection) ImGui::PushStyleColor(ImGuiCol_FrameBg, colorNotSupported);
+                if (def->mSize == 4) {
+                    if (ImGui::InputScalar("", ImGuiDataType_::ImGuiDataType_U32, (UINT32*)data, (const void*)1, (const void*)10, "%d", ImGuiInputTextFlags_AutoSelectAll)) {
+                        WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                        modscript << *(UINT32*)data << "\n";
+                    }
+                }
+                else {
+                    ImGui::Text("not supported yet - length %d pointer %08X", def->mSize, data);
+                }
+            }
+        }
+        //if (arrayIndex == -2 && !supported) ImGui::Text("not supported yet - length %d pointer %08X", def->mSize, data); //not sure how to show this easily...whatever
+        if (!supported && isInCurrentCollection) ImGui::PopStyleColor();
+
+
+        ImGui::TableNextColumn();
+
+        if (!isInCurrentCollection) {
+            //ImGui::SameLine();
+            if (arrayIndex == -2) {
+                DWORD key = def->mKey;
+                ImGui::Text("Make local, size=");
+                //int count = ((Attrib::Array*)Attrib::Collection::GetNode(currentCollection, 0, key, &key))->mSize;
+                int count = Attrib::Attribute::GetLength(&attrib);
+                ImGui::SameLine();
+                ImGui::PushItemWidth(20.0f);
+                if (ImGui::InputInt("##arraysize", &count, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue)) {
+
+                    char* oldData = new char[count * def->mSize];
+                    for (int i = 0; i < count; i++) {
+                        auto src = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, i);
+                        if (src != NULL) memcpy(oldData + def->mSize * i, src, def->mSize);
+                    }
+
+                    Attrib::Collection::AddAttribute(currentCollection, 0, def->mKey, count);
+                    for (int i = 0; i < count; i++) {
+                        auto dst = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, i);
+                        if (dst != NULL) memcpy(dst, oldData + def->mSize * i, def->mSize);
+                    }
+                    delete[] oldData;
+                    modscript << "add_field " << className << " " << collectionName << " " << attributeName << " " << count << "\n";
+                }
+                ImGui::PopItemWidth();
+            }
+            else
+                if (!(def->mFlags & Attrib::Definition::Flags::kArray) && ImGui::Button("Make local")) {
+                    void* dataptr_old = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, 0);
+                    Attrib::Collection::AddAttribute(currentCollection, 0, def->mKey, 0);
+                    auto dst = (void*)Attrib::Collection::GetData(currentCollection, 0, def->mKey, 0);
+                    if (dst != NULL && dataptr_old != NULL) memcpy(dst, dataptr_old, def->mSize);
+                    modscript << "add_field " << className << " " << collectionName << " " << attributeName << "\n";
+                }
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+        }
+        else {
+            if (ImGui::Button("Remove")) {
+                Attrib::Collection::RemoveAttribute(currentCollection, 0, def->mKey);
+                modscript << "delete_field " << className << " " << collectionName << " " << attributeName << "\n";
+            }
+            ImGui::SameLine();
+        }
+
+
+        //ImGui::SameLine();
+
+        if (arrayIndex == -2) {
+            if (AttribTypes[def->mType]) ImGui::Text("(array of %s)", AttribTypes[def->mType]);
+            else ImGui::Text("(array of %08X)", def->mType);
+            Attrib::Instance::destructor(&instance);
+        }
+        else {
+            if (AttribTypes[def->mType]) ImGui::Text("(%s)", AttribTypes[def->mType]);
+            else ImGui::Text("(%08X)", def->mType);
+        }
+
+
+        if (supported) modscript.flush();
+    }
+
+
+
+
+    void ShowEditAttribValue(char* className, char* collectionName, Attrib::Collection* currentCollection, Attrib::Definition* def, Attrib::Collection** nextCollection) {
+        if (currentCollection == NULL || def == NULL) return;
+
+        DWORD key = def->mKey;
+
+        //Attrib::Node* node = Attrib::Collection::GetNode(col, 0, key, &key);
+
+//        char* attributeName;
+//        if (AttribFields[def->mKey] != NULL) {
+//            attributeName = AttribFields[def->mKey];
+//        }
+//        else {
+//            char attributeN[10];
+//            sprintf_s(attributeN, "%08X", def->mKey);
+            //attributeName = attributeN;
+//        }
+        char attributeName[80];
+        if (AttribFields[def->mKey] != NULL) {
+            snprintf(attributeName, sizeof(attributeName), "%s", AttribFields[def->mKey]);
+        }
+        else {
+            snprintf(attributeName, sizeof(attributeName), "0x%08x", def->mKey);
+        }
+
+        //replicate what Attrib::Collection::GetData does
+        //TODO BROKEN
+//        if (node != NULL) {
+            //if (!(node->mFlags & Attrib::Node::Flags::NotAnArray)) {
+//                if (node->mFlags & Attrib::Node::Flags::DirectPointer) {
+//                    EditAttrib(className, collectionName, attributeName, node->mPtr, def);
+            //	}
+//                else if (node->mFlags & Attrib::Node::Flags::InLayout) {
+//                    EditAttrib(className, collectionName, attributeName, col->mLayout + node->mPtr, def);
+//                }
+//                else if (node->mFlags & Attrib::Node::Flags::Static) {
+//                    EditAttrib(className, collectionName, attributeName, col->mClass->mPrivates->mStaticData + node->mPtr, def);
+//                }
+//                else {
+//                    EditAttrib(className, collectionName, attributeName, node->mPtr, def);
+//                }
+            //}
+            //else {
+//                //array
+//                Attrib::Array* arr;
+//                if (!(node->mFlags & Attrib::Node::Flags::InLayout)) {
+//                    if (!(node->mFlags & Attrib::Node::Flags::Static)) {
+//                        arr = (Attrib::Array*)node->mPtr;
+            //		}
+            //		else {
+            //			arr = (Attrib::Array*)(col->mClass->mPrivates->mStaticData + node->mPtr);
+            //		}
+//                }
+//                else {
+            //		arr = (Attrib::Array*)(col->mLayout + node->mPtr);
+//                }
+//                if (ImGui::TreeNode(attributeName)) {
+//                    for (int i = 0; i < arr->mCount; i++) {
+//                        //EditAttrib(className, collectionName, attributeName, (int)((arr + 1) + (arr->mEncodedTypeAndPad >> 0xc & 8) + (arr->mSize * i)), def, i);
+//                        EditAttrib(className, collectionName, attributeName, Attrib::Collection::GetData(col, 0, def->mKey, i), def, i);
+//                    }
+//                    ImGui::TreePop();
+//                }
+            //}
+//        }
+
+        ImGui::PushID(def->mKey);
+
+        if (def->mFlags & Attrib::Definition::Flags::kArray) {
+            //ImGui::Text("Array attribute %08X not supported yet - count %d size %d", def->mKey, def->mMaxCount, def->mSize);
+            Attrib::Node* node = Attrib::Collection::GetNode(currentCollection, 0, key, &key);
+
+            if (node != NULL) {
+                Attrib::Array* arr;
+                if (!(node->mFlags & Attrib::Node::Flags::InLayout)) {
+                    if (!(node->mFlags & Attrib::Node::Flags::Static)) {
+                        arr = (Attrib::Array*)node->mPtr;
+                    }
+                    else {
+                        arr = (Attrib::Array*)(currentCollection->mClass->mPrivates->mStaticData + node->mPtr);
+                    }
+                }
+                else {
+                    arr = (Attrib::Array*)(currentCollection->mLayout + node->mPtr);
+                }
+
+                ImGui::TableNextRow(); //TODO
+                //ImGui::PushID(field_desc.Name);
+                ImGui::TableNextColumn();
+                ImGui::AlignTextToFramePadding();
+                //ImGui::TextUnformatted(field_desc.Name);
+                //ImGui::TableNextColumn();
+
+                bool treeNode = ImGui::TreeNode(attributeName);
+                EditAttrib(className, collectionName, attributeName, Attrib::Collection::GetData(currentCollection, 0, def->mKey, 0), def, currentCollection, nextCollection, -2, false); //use this to display array info header
+                if (arr != NULL && treeNode) {
+                    for (int i = 0; i < arr->mCount; i++) {
+                        ImGui::PushID(i);
+                        //EditAttrib(className, collectionName, attributeName, (int)((arr + 1) + (arr->mEncodedTypeAndPad >> 0xc & 8) + (arr->mSize * i)), def, i);
+                        EditAttrib(className, collectionName, attributeName, Attrib::Collection::GetData(currentCollection, 0, def->mKey, i), def, currentCollection, nextCollection, i);
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+            }
+            else {
+                EditAttrib(className, collectionName, attributeName, NULL, def, currentCollection, nextCollection, -2);
+            }
+
+
+        }
+        else {
+            //if (def->mFlags & Attrib::Definition::Flags::kInLayout) {
+            //    //in layout
+            //    EditAttrib(className, collectionName, col->mLayout + def->mOffset, def);
+            //}
+            //else {
+                //collection data
+            EditAttrib(className, collectionName, attributeName, Attrib::Collection::GetData(currentCollection, 0, def->mKey, 0), def, currentCollection, nextCollection, -1); //GetData works for anything that's cool
+
+            //}
+        }
+        ImGui::PopID();
+    }
+
+#define CollectionName 0x9CA1C8F9
+#define PrevNextStackSize 32
+    static Attrib::Collection* PrevNextStack[PrevNextStackSize];
+    static UINT PrevNextStackPos = 0;
+
+    void updatePrevNextStack(Attrib::Collection* col) {
+        //if (!doAttribEditor) return;
+        PrevNextStack[PrevNextStackPos] = col;
+        PrevNextStackPos++;
+        PrevNextStackPos %= PrevNextStackSize;
+        PrevNextStack[PrevNextStackPos] = NULL;
+    }
+
+    void DisplayChildrenRecursive(Attrib::Class* clazz, Attrib::Collection* parent, Attrib::Collection** selected) {
+
+        for (int i = 0; i < clazz->mPrivates->mCollections.__inherit_0.mTableSize; i++) {
+            auto chi = Attrib::FindCollection(clazz->mKey, clazz->mPrivates->mCollections.__inherit_0.mTable[i].mKey, NULL);
+            if (chi != NULL && chi->mParent == parent) {
+                char buf[64];
+                char** colName;
+                if ((colName = (char**)Attrib::Collection::GetData(chi, 0, CollectionName, 0)) && *colName && **colName) {
+                    snprintf(buf, sizeof(buf), *colName);
+                }
+                else if (AttribCollections[chi->mKey] != NULL) {
+                    snprintf(buf, sizeof(buf), "%s", AttribCollections[chi->mKey]);
+                }
+                else {
+                    snprintf(buf, sizeof(buf), "0x%08x", chi->mKey);
+                }
+
+
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGuiTreeNodeFlags tree_flags = ImGuiTreeNodeFlags_None;
+                tree_flags |= ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick; // Standard opening mode as we are likely to want to add selection afterwards
+                tree_flags |= ImGuiTreeNodeFlags_NavLeftJumpsToParent;  // Left arrow support
+                tree_flags |= ImGuiTreeNodeFlags_SpanFullWidth;         // Span full width for easier mouse reach
+                tree_flags |= ImGuiTreeNodeFlags_DrawLinesToNodes;      // Always draw hierarchy outlines
+                if (chi == *selected)
+                    tree_flags |= ImGuiTreeNodeFlags_Selected;          // Draw selection highlight
+                //if (node->Childs.Size == 0)
+                //    tree_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen; // Use _NoTreePushOnOpen + set is_open=false to avoid unnecessarily push/pop on leaves.
+                //if (node->DataMyBool == false)
+                //    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                int id = chi->mKey + clazz->mKey;
+                ImGui::SetNextItemStorageID((ImGuiID)id);        // Use node->UID as storage id
+                if (ImGui::TreeNodeEx((void*)(intptr_t)id, tree_flags, buf)) {
+                    DisplayChildrenRecursive(clazz, chi, selected);
+                    ImGui::TreePop();
+                }
+                //if (ImGui::TreeNode(buf)) {
+                //    DisplayChildrenRecursive(clazz, chi, selected);
+                //    ImGui::TreePop();
+                //}
+
+                //if (node->Childs.Size == 0)
+                //    is_open = false;
+                //if (node->DataMyBool == false)
+                //    ImGui::PopStyleColor();
+                if (ImGui::IsItemFocused()) {
+                    updatePrevNextStack(*selected);
+                    *selected = chi;
+                    //ImGui::TableNextRow();
+                    //ImGui::TableNextColumn();
+                    ImGui::SameLine(); ImGui::TextUnformatted(" "); //ugly selection fix                        
+                }
+
+            }
+        }
+
+    }
+
+    void EditCollection(Attrib::Collection*& col)
+    {
+        if (col != NULL) {
+            static char classBuf[64], collBuf[100];
+
+            if (AttribClasses[col->mClass->mKey] != NULL) snprintf(classBuf, sizeof(classBuf), "%s", AttribClasses[col->mClass->mKey]);
+            else snprintf(classBuf, sizeof(classBuf), "0x%08x", col->mClass->mKey);
+
+            //if (AttribCollections[col->mKey] != NULL) snprintf(collBuf, sizeof(collBuf), "%s", AttribCollections[col->mKey]);
+            //else snprintf(collBuf, sizeof(collBuf), "0x%08x", col->mKey);
+
+            char** colName;
+            if ((colName = (char**)Attrib::Collection::GetData(col, 0, CollectionName, 0)) && *colName && **colName) {
+                snprintf(collBuf, sizeof(collBuf), *colName);
+            }
+            else if (AttribCollections[col->mKey] != NULL) snprintf(collBuf, sizeof(collBuf), "%s", AttribCollections[col->mKey]);
+            else snprintf(collBuf, sizeof(collBuf), "0x%08x", col->mKey);
+
+
+            if (col->mClass->mPrivates->mNumDefinitions > 0) {
+                Attrib::Definition* defs = col->mClass->mPrivates->mDefinitions;
+                int uid = col->mKey + col->mClass->mKey;
+
+                Attrib::Collection* nextCollection = NULL;
+
+                if (ImGui::BeginTable("##properties", 3, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersH)) {
+
+                    // Push object ID after we entered the table, so table is shared for all objects
+                    //ImGui::PushID(uid + 1);
+                    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+                    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 2.0f); // Default twice larger
+                    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+
+                    ImGui::TableNextRow(); //TODO
+                    //ImGui::PushID(field_desc.Name);
+                    ImGui::TableNextColumn();
+                    ImGui::AlignTextToFramePadding();
+
+                    if (ImGui::TreeNodeEx("Static", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        for (int i = 0; i < col->mClass->mPrivates->mNumDefinitions; i++) {
+                            if (defs[i].mFlags & Attrib::Definition::Flags::kIsStatic) {
+                                ShowEditAttribValue(classBuf, collBuf, col, &defs[i], &nextCollection);
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TableNextRow(); //TODO
+                    //ImGui::PushID(field_desc.Name);
+                    ImGui::TableNextColumn();
+                    ImGui::AlignTextToFramePadding();
+
+                    if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        for (int i = 0; i < col->mClass->mPrivates->mNumDefinitions; i++) {
+                            if (defs[i].mFlags & Attrib::Definition::Flags::kInLayout) {
+                                ShowEditAttribValue(classBuf, collBuf, col, &defs[i], &nextCollection);
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::TableNextRow(); //TODO
+                    //ImGui::PushID(field_desc.Name);
+                    ImGui::TableNextColumn();
+                    ImGui::AlignTextToFramePadding();
+
+                    if (ImGui::TreeNodeEx("Collection", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        for (int i = 0; i < col->mClass->mPrivates->mNumDefinitions; i++) {
+                            if (!(defs[i].mFlags & Attrib::Definition::Flags::kInLayout) && !(defs[i].mFlags & Attrib::Definition::Flags::kIsStatic)) {
+                                ShowEditAttribValue(classBuf, collBuf, col, &defs[i], &nextCollection);
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+
+                    //ImGui::PopID();
+                    ImGui::EndTable();
+                }
+
+                if (nextCollection != NULL) {
+                    updatePrevNextStack(col);
+                    col = nextCollection;
+                }
+            }
+
+        }
+    }
+
+    void ShowAttribEditor(bool* doAttribEditor) {
+
+        if (ImGui::Begin("Attrib editor", doAttribEditor)) {
+            Attrib::ClassTable__Node* classTable = *(Attrib::ClassTable__Node**)(*(DWORD*)(*DatabasePrivate + 0x4) + 0x8);
+            auto classTableCount = (UINT16*)(*(DWORD*)(*DatabasePrivate + 0x4) + 0x8 + 0x4); //0x4 TableSize, 0x6 NumEntries
+
+            static Attrib::Collection* col = NULL; //selected
+            static char FilterBuf[100];
+
+            //ImGui::Text("class table at %08X", classTable);
+            //ImGui::Text("class table count at %08X", classTableCount);
+            //if (classTableCount != NULL) ImGui::Text("class table count %d", *classTableCount);
+
+            // Left side: draw tree
+            // - Currently using a table to benefit from RowBg feature
+            // - Our tree node are all of equal height, facilitating the use of a clipper.
+            if (ImGui::BeginChild("##tree", ImVec2(300, 0), ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened))
+            {
+                ImGui::PushItemFlag(ImGuiItemFlags_NoNavDefaultFocus, true);
+                //ImGui::Checkbox("Use Clipper", &UseClipper);
+                //ImGui::SameLine();
+                //ImGui::Text("(%d root nodes)", root_node->Childs.Size);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::SetNextItemShortcut(ImGuiMod_Ctrl | ImGuiKey_F, ImGuiInputFlags_Tooltip);
+                ImGui::InputTextWithHint("##Filter", "class name", FilterBuf, IM_COUNTOF(FilterBuf), ImGuiInputTextFlags_EscapeClearsAll);
+                //if ()
+                    //Filter.Build();
+                ImGui::PopItemFlag();
+
+                /* { //broken, i'm not debugging that shit rn
+                    bool canDoPrev = PrevNextStack[(PrevNextStackPos - 1) % PrevNextStackSize] != NULL;
+                    bool canDoNext = PrevNextStack[(PrevNextStackPos + 1) % PrevNextStackSize] != NULL;
+                    if (!canDoPrev) ImGui::BeginDisabled();
+                    float width = ImGui::CalcItemWidth();
+                    ImGui::SetNextItemWidth(width / 2);
+                    if (ImGui::Button("Previous") && canDoPrev) {
+                        PrevNextStackPos = (PrevNextStackPos - 1) % PrevNextStackSize;
+                        col = PrevNextStack[PrevNextStackPos];
+                    }
+                    if (!canDoPrev) ImGui::EndDisabled();
+
+                    ImGui::SameLine();
+                    if (!canDoNext) ImGui::BeginDisabled();
+                    ImGui::SetNextItemWidth(width / 2);
+                    if (ImGui::Button("Next") && canDoNext) {
+                        PrevNextStackPos = (PrevNextStackPos + 1) % PrevNextStackSize;
+                        col = PrevNextStack[PrevNextStackPos];
+                    }
+                    if (!canDoNext) ImGui::EndDisabled();
+
+                    if (canDoPrev) ImGui::Text("Previous 0x%08x", PrevNextStack[(PrevNextStackPos - 1) % PrevNextStackSize]->mKey);
+                    if (canDoNext) ImGui::Text("Next 0x%08x", PrevNextStack[(PrevNextStackPos + 1) % PrevNextStackSize]->mKey);
+                }*/
+
+                if (ImGui::BeginTable("##list", 1, ImGuiTableFlags_RowBg)) {
+                    if (classTable != NULL) {
+                        for (int i = 0; i < *classTableCount; i++) {
+                            //char buf[100];
+                            //sprintf_s(buf, 99, "class 0x%08x %s at %08X (node at %08X)", classTable[i].mKey, AttribClasses[classTable[i].mKey] != NULL ? AttribClasses[classTable[i].mKey] : "", & classTable[i].mPtr, & classTable[i]);
+
+                            if (classTable[i].mPtr != NULL && classTable[i].mKey != 0) {
+                                char buf[64];
+                                if (AttribClasses[classTable[i].mKey] != NULL) {
+                                    snprintf(buf, sizeof(buf), "%s", AttribClasses[classTable[i].mKey]);
+                                }
+                                else {
+                                    snprintf(buf, sizeof(buf), "0x%08x", classTable[i].mKey);
+                                }
+
+                                if (FilterBuf[0] != 0) {
+                                    int length = 0;
+                                    while (FilterBuf[length] != 0) length++;
+                                    if (strncmp(FilterBuf, buf, length)) continue;
+                                }
+
+
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+                                ImGuiTreeNodeFlags tree_flags = ImGuiTreeNodeFlags_None;
+                                tree_flags |= ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick; // Standard opening mode as we are likely to want to add selection afterwards
+                                tree_flags |= ImGuiTreeNodeFlags_NavLeftJumpsToParent;  // Left arrow support
+                                tree_flags |= ImGuiTreeNodeFlags_SpanFullWidth;         // Span full width for easier mouse reach
+                                tree_flags |= ImGuiTreeNodeFlags_DrawLinesToNodes;      // Always draw hierarchy outlines
+                                int id = classTable[i].mKey;
+                                ImGui::SetNextItemStorageID((ImGuiID)id);        // Use node->UID as storage id
+                                if (ImGui::TreeNodeEx((void*)(intptr_t)id, tree_flags, buf)) {
+                                    DisplayChildrenRecursive(classTable[i].mPtr, NULL, &col);
+                                    ImGui::TreePop();
+                                }
+                            }
+                        }
+                    }
+
+                    //if (UseClipper)
+                    //    DrawClippedTree(root_node);
+                    //else
+                    //    DrawTree(root_node);
+                    ImGui::EndTable();
+                }
+            }
+            ImGui::EndChild();
+
+            // Right side: draw properties
+            ImGui::SameLine();
+
+            if (ImGui::BeginChild("##editor", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened))
+            {
+
+                ImGui::BeginGroup(); // Lock X position
+
+                ImGui::Text("Warning: this may edit parent Attrib nodes!");
+
+                if (ImGui::TreeNode("Go to...")) {
+                    static char gotoclassBuf[64], gotocollBuf[100];
+                    static DWORD classKey, collKey;
+
+                    if (ImGui::InputText("ClassKey", gotoclassBuf, 64, ImGuiInputTextFlags_AutoSelectAll)) {
+                        if (gotoclassBuf[0] == '0' && gotoclassBuf[1] == 'x') classKey = strtoul(gotoclassBuf, NULL, 16);
+                        else classKey = getVltHash(gotoclassBuf);
+                        updatePrevNextStack(col);
+                        col = Attrib::FindCollection(classKey, collKey, NULL);
+                    }
+                    if (ImGui::InputText("CollectionKey", gotocollBuf, 64, ImGuiInputTextFlags_AutoSelectAll)) {
+                        if (gotoclassBuf[0] == '0' && gotoclassBuf[1] == 'x') collKey = strtoul(gotocollBuf, NULL, 16);
+                        else collKey = getVltHash(gotocollBuf);
+                        updatePrevNextStack(col);
+                        col = Attrib::FindCollection(classKey, collKey, NULL);
+                    }
+
+                    ImGui::Separator();
+                    ImGui::TreePop();
+                }
+
+                EditCollection(col);
+
+
+
+
+
+                //if (ExampleTreeNode* node = SelectedNode)
+                //{
+                //    ImGui::Text("%s", node->Name);
+                //    ImGui::TextDisabled("UID: 0x%08X", node->UID);
+                //    ImGui::Separator();
+                //    if (ImGui::BeginTable("##properties", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY))
+                //    {
+                //        // Push object ID after we entered the table, so table is shared for all objects
+                //        ImGui::PushID((int)node->UID);
+                //        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+                //        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 2.0f); // Default twice larger
+                //        if (node->HasData)
+                //        {
+                //            // In a typical application, the structure description would be derived from a data-driven system.
+                //            // - We try to mimic this with our ExampleMemberInfo structure and the ExampleTreeNodeMemberInfos[] array.
+                //            // - Limits and some details are hard-coded to simplify the demo.
+                //            for (const ExampleMemberInfo& field_desc : ExampleTreeNodeMemberInfos)
+                //            {
+                //                ImGui::TableNextRow();
+                //                ImGui::PushID(field_desc.Name);
+                //                ImGui::TableNextColumn();
+                //                ImGui::AlignTextToFramePadding();
+                //                ImGui::TextUnformatted(field_desc.Name);
+                //                ImGui::TableNextColumn();
+                //                void* field_ptr = (void*)(((unsigned char*)node) + field_desc.Offset);
+                //                switch (field_desc.DataType)
+                //                {
+                //                case ImGuiDataType_Bool:
+                //                {
+                //                    IM_ASSERT(field_desc.DataCount == 1);
+                //                    ImGui::Checkbox("##Editor", (bool*)field_ptr);
+                //                    break;
+                //                }
+                //                case ImGuiDataType_S32:
+                //                {
+                //                    int v_min = INT_MIN, v_max = INT_MAX;
+                //                    ImGui::SetNextItemWidth(-FLT_MIN);
+                //                    ImGui::DragScalarN("##Editor", field_desc.DataType, field_ptr, field_desc.DataCount, 1.0f, &v_min, &v_max);
+                //                    break;
+                //                }
+                //                case ImGuiDataType_Float:
+                //                {
+                //                    float v_min = 0.0f, v_max = 1.0f;
+                //                    ImGui::SetNextItemWidth(-FLT_MIN);
+                //                    ImGui::SliderScalarN("##Editor", field_desc.DataType, field_ptr, field_desc.DataCount, &v_min, &v_max);
+                //                    break;
+                //                }
+                //                case ImGuiDataType_String:
+                //                {
+                //                    ImGui::InputText("##Editor", reinterpret_cast<char*>(field_ptr), 28);
+                //                    break;
+                //                }
+                //                }
+                //                ImGui::PopID();
+                //            }
+                //        }
+                //        ImGui::PopID();
+                //        ImGui::EndTable();
+                //    }
+                //}
+                ImGui::EndGroup();
+
+            }
+            ImGui::EndChild();
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+        ImGui::End();
+    }
+
+}

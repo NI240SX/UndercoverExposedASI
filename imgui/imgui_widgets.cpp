@@ -3887,14 +3887,14 @@ bool ImGui::InputScalar(const char* label, ImGuiDataType data_type, void* p_data
     return value_changed;
 }
 
-bool ImGui::InputScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, const void* p_step, const void* p_step_fast, const char* format, ImGuiInputTextFlags flags)
+int ImGui::InputScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, const void* p_step, const void* p_step_fast, const char* format, ImGuiInputTextFlags flags)
 {
     ImGuiWindow* window = GetCurrentWindow();
     if (window->SkipItems)
         return false;
 
     ImGuiContext& g = *GImGui;
-    bool value_changed = false;
+    int value_changed = 0;
     BeginGroup();
     PushID(label);
     PushMultiItemsWidths(components, CalcItemWidth());
@@ -3904,7 +3904,7 @@ bool ImGui::InputScalarN(const char* label, ImGuiDataType data_type, void* p_dat
         PushID(i);
         if (i > 0)
             SameLine(0, g.Style.ItemInnerSpacing.x);
-        value_changed |= InputScalar("", data_type, p_data, p_step, p_step_fast, format, flags);
+        value_changed |= InputScalar("", data_type, p_data, p_step, p_step_fast, format, flags) << i;
         PopID();
         PopItemWidth();
         p_data = (void*)((char*)p_data + type_size);
