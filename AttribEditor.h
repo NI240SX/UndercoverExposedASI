@@ -2,12 +2,16 @@
 #include <sys/types.h>
 #include "nfs_structs.h"
 #include "MiscGameFuncs.h"
-#include "imgui/imgui.h"
 #include <map>
 #include <ctime>
 #include <fstream>
 #include <chrono>
 
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_impl_dx9.h"
+#include "imgui/imgui_internal.h"
+#include "imgui/implot.h"
 //GetLocalizedString (EALocalizationManager something)
 //
 
@@ -15,8 +19,9 @@
 #define IM_MAX(A, B)            (((A) >= (B)) ? (A) : (B))
 #define IM_CLAMP(V, MN, MX)     ((V) < (MN) ? (MN) : (V) > (MX) ? (MX) : (V))
 
+constexpr auto CollectionName = 0x9CA1C8F9;
+
 namespace AttribEditor {
-    DWORD* DatabasePrivate = (DWORD*)0x01293d90;
 
 
     std::ofstream modscript;
@@ -26,6 +31,9 @@ namespace AttribEditor {
     std::map<int, const char*> AttribClasses;
     std::map<int, const char*> AttribCollections;
     std::map<int, const char*> AttribFields;
+
+    bool GCollectionKeysInitialized = false;
+    std::map<int, const char*> GCollectionKeys;
 
     void initializeModscript() {
         modscript.open("generated.nfsms", std::ios_base::app | std::ios_base::out);
@@ -155,6 +163,17 @@ namespace AttribEditor {
         inputFile.close();
     }
 
+    void InitGCollectionKeys() {
+        auto gameplay = Attrib::Database::GetClass(*Attrib::DatabasePrivate, 0, getVltHash("gameplay"));
+        if (gameplay == NULL) return;
+
+        for (int i = 0; i < gameplay->mPrivates->mCollections.__inherit_0.mTableSize; i++) {
+            auto chi = Attrib::FindCollection(gameplay->mKey, gameplay->mPrivates->mCollections.__inherit_0.mTable[i].mKey, NULL);
+            if (chi != NULL) {
+                GCollectionKeys[chi->mKey] = *(char**)Attrib::Collection::GetData(chi, 0, CollectionName, 0); //okayish for display only
+            }
+        }
+    }
 
 
 
@@ -162,8 +181,12 @@ namespace AttribEditor {
         modscript << "update_field " << className << " " << collectionName << " " << attributeName << (arrayIndex == -1 ? " " : arrayIndexBuf);
     }
 
-    static const float one = 1.0f;
-    static const float ten = 10.0f;
+    static const float one_f = 1.0f;
+    static const float ten_f = 10.0f;
+
+    static const int one_i = 1;
+    static const int ten_i = 10;
+    static const int u8_max = 255;
 
 
     static const ImVec4 colorNotExisting{
@@ -174,6 +197,31 @@ namespace AttribEditor {
     };
 
 
+
+    const char* GetCollectionName(DWORD classKey, DWORD collectionKey) {
+        if (AttribCollections[collectionKey] != NULL) {
+            return AttribCollections[collectionKey];
+        }
+        Attrib::Collection* chi = Attrib::FindCollection(classKey, collectionKey, NULL);
+        if (chi != NULL) {
+            int NameDefOffset = -1;
+            char** colName;
+            for (int i = 0; i < chi->mClass->mPrivates->mNumDefinitions; i++) {
+                if (chi->mClass->mPrivates->mDefinitions[i].mKey == CollectionName && chi->mClass->mPrivates->mDefinitions[i].mFlags & Attrib::Definition::Flags::kInLayout) {
+                    NameDefOffset = chi->mClass->mPrivates->mDefinitions[i].mOffset;
+                    break;
+                }
+            }
+            if (NameDefOffset != -1) colName = (char**)(chi->mLayout + NameDefOffset);
+            else (colName = (char**)Attrib::Collection::GetData(chi, 0, CollectionName, 0));
+
+            if (colName && *colName && **colName) {
+                return *colName;
+            }
+        }
+        else return "(collection not found)";
+        return NULL;
+    }
 
     void EditRefSpec(int data, char* className, char* collectionName, char* attributeName, int arrayIndex, char  arrayIndexBuf[8], Attrib::Collection** nextCollection, const char* classText, const char* collectionText, bool displayVltedNames = true)
     {
@@ -193,7 +241,7 @@ namespace AttribEditor {
         //if (lastAttribute != def->mKey) {
         if (AttribClasses[*classKey] != NULL) snprintf(classKeyBuf, sizeof(classKeyBuf), "%s", AttribClasses[*classKey]);
         else snprintf(classKeyBuf, sizeof(classKeyBuf), "0x%08x", *classKey);
-        if (AttribCollections[*collectionKey] != NULL) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", AttribCollections[*collectionKey]);
+        if (GetCollectionName(*classKey, *collectionKey)) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", GetCollectionName(*classKey, *collectionKey));
         else snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "0x%08x", *collectionKey);
         //lastAttribute = def->mKey;
         //}
@@ -238,7 +286,7 @@ namespace AttribEditor {
         }
         ImGui::Text(names[count - 1]);
         ImGui::SetNextItemWidth(width);
-        int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)(data), count, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+        int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)(data), count, (void*)(&one_f), (void*)(&ten_f), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
         for (int i = 0; i < count; i++) {
             if (result & (i << 0)) {
                 WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
@@ -397,8 +445,16 @@ namespace AttribEditor {
         if (dataFieldName != NULL) ImGui::PopID();
     }
 
-    void EnumFlags(int data, const char* items_separated_by_zeroes, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8])
+    void EnumFlags(int data, const char* items_separated_by_zeroes, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
     {
+        if (dataFieldName != NULL) {
+            if (displayVltedNames) {
+                ImGui::Text(dataFieldName);
+                ImGui::SameLine();
+            }
+            ImGui::PushID(dataFieldName);
+        }
+
         float width = ImGui::CalcItemWidth();
         ImGui::SetNextItemWidth(2 * width / 3);
         bool showFlags = ImGui::TreeNodeEx("Flags", ImGuiTreeNodeFlags_NoTreePushOnOpen);
@@ -407,6 +463,7 @@ namespace AttribEditor {
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::InputInt("##enumManual", (int*)data)) {
             WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            if (dataFieldName != NULL) modscript << dataFieldName << " ";
             modscript << *(UINT32*)data << "\n";
         }
 
@@ -425,6 +482,9 @@ namespace AttribEditor {
                     else {
                         (*(int*)data) &= ~(1 << idx);
                     }
+                    WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                    if (dataFieldName != NULL) modscript << dataFieldName << " ";
+                    modscript << *(UINT32*)data << "\n";
                 }
                 p += ImStrlen(p) + 1;
 
@@ -439,6 +499,9 @@ namespace AttribEditor {
                     else {
                         (*(int*)data) &= ~(1 << idx);
                     }
+                    WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                    if (dataFieldName != NULL) modscript << dataFieldName << " ";
+                    modscript << *(UINT32*)data << "\n";
                 }
                 p += ImStrlen(p) + 1;
                 idx++;
@@ -447,6 +510,7 @@ namespace AttribEditor {
             ImGui::TreePop();
         }
 
+        if (dataFieldName != NULL) ImGui::PopID();
     }
 
     void EnumCombo(int data, const char** items, int count, char* className, char* collectionName, char* attributeName, int arrayIndex, char arrayIndexBuf[8], const char* dataFieldName = NULL, bool displayVltedNames = true)
@@ -513,9 +577,124 @@ namespace AttribEditor {
             className, collectionName, attributeName, arrayIndex, arrayIndexBuf, dataFieldName, displayVltedNames);
     }
 
+    constexpr auto car_paint_swatch = 0x8C3CC099;
+    constexpr auto swatch = 0x4256700E;
+
+    void PreviewSwatchPacked(int swatchPointer) {
+        auto col = Attrib::FindCollection(car_paint_swatch, swatch, NULL);
+        if (col == NULL) return;
+        struct CarPaintSwatch* cps = (struct CarPaintSwatch*)Attrib::Collection::GetData(col, 0, swatch, *(UINT8*)(swatchPointer));
+
+        float rgb[3]; //BGR
+        if (cps != NULL) {
+            rgb[0] = 1.0f / 255.0f * ((cps->rgb >> 16) & 0xFF);
+            rgb[1] = 1.0f / 255.0f * ((cps->rgb >> 8) & 0xFF);
+            rgb[2] = 1.0f / 255.0f * ((cps->rgb >> 0) & 0xFF);
+        }
+
+        float hsv[3];
+        ImGui::ColorConvertRGBtoHSV(rgb[0], rgb[1], rgb[2], hsv[0], hsv[1], hsv[2]);
+        hsv[1] = 1.0f / 255.0f * *(UINT8*)(swatchPointer + 1);
+        hsv[2] = 1.0f / 255.0f * *(UINT8*)(swatchPointer + 2);
+        ImGui::ColorEdit3("", hsv, ImGuiColorEditFlags_InputHSV);
+    }
+
+    void PreviewSwatch(int swatchPointer) {
+        auto col = Attrib::FindCollection(car_paint_swatch, swatch, NULL);
+        if (col == NULL) return;
+        struct CarPaintSwatch* cps = (struct CarPaintSwatch*)Attrib::Collection::GetData(col, 0, swatch, *(UINT8*)(swatchPointer));
+
+        float rgb[3]; //BGR
+        if (cps != NULL) {
+            rgb[0] = 1.0f / 255.0f * ((cps->rgb >> 16) & 0xFF);
+            rgb[1] = 1.0f / 255.0f * ((cps->rgb >> 8) & 0xFF);
+            rgb[2] = 1.0f / 255.0f * ((cps->rgb >> 0) & 0xFF);
+        }
+
+        float hsv[3];
+        ImGui::ColorConvertRGBtoHSV(rgb[0], rgb[1], rgb[2], hsv[0], hsv[1], hsv[2]);
+        hsv[1] = *(float*)(swatchPointer + 4);
+        hsv[2] = *(float*)(swatchPointer + 8);
+        ImGui::ColorEdit3("", hsv, ImGuiColorEditFlags_InputHSV);
+    }
+
+    void EditColorPacked(const char* colorText, int data, float totalWidth, bool& edited) {
+        bool doColor = ImGui::TreeNodeEx(colorText, ImGuiTreeNodeFlags_NoTreePushOnOpen);
+        ImGui::PushID(colorText);
+        ImGui::SameLine(); PreviewSwatchPacked(data);
+        ImGui::PopID();
+        if (doColor) {
+            ImGui::TreePush(colorText);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data), &one_i, &ten_i)) {
+                //TODO clamp to max swatch
+                edited = true;
+            }
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::SliderScalar("##sat", ImGuiDataType_U8, (UINT8*)(data + 1), &zero, &u8_max)) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::SliderScalar("##bright", ImGuiDataType_U8, (UINT8*)(data + 2), &zero, &u8_max)) edited = true;
+
+            ImGui::TreePop();
+        }
+    }
+
+    bool HideHeritedAttributes = false;
+    bool HideEmptyAttributes = false;
+
+    void PreviewCurve(struct Curve* curve, char* attributeName) {
+        if (ImGui::TreeNode("Curve preview")) {
+            //ImGui::Text("better than vlted huh");
+
+            float* xval = new float[curve->X.mLength];
+            float* yval = new float[curve->Y.mLength];
+
+            for (int i = 0; i < curve->X.mLength; i++) {
+                xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]);// *curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
+            }
+            for (int i = 0; i < curve->Y.mLength; i++) {
+                yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]);// *curve->graphScale;
+            }
+
+
+            if (ImPlot::BeginPlot("##GraphPreview")) {
+                ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
+                //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
+                //    ImPlotProp_Marker, ImPlotMarker_Square,
+                //    ImPlotProp_MarkerSize, 6,
+                //    ImPlotProp_LineColor, GetColormapColor(1),
+                //    ImPlotProp_FillColor, GetColormapColor(1),
+                //    ImPlotProp_FillAlpha, 0.25f
+                //    });
+                ImPlot::EndPlot();
+            }
+
+            delete[] xval;
+            delete[] yval;
+            ImGui::TreePop();
+        }
+    }
+
     void EditAttrib(char* className, char* collectionName, char* attributeName, int data, Attrib::Definition* def, Attrib::Collection* currentCollection, Attrib::Collection** nextCollection, int arrayIndex, bool notAnArray = true) {
         //Array index -1 = not an array
         //Array index -2 = array header
+
+        if (HideEmptyAttributes && data == NULL) return;
+
+        bool supported = true;
+        bool isInCurrentCollection = def->mFlags & Attrib::Definition::Flags::kInLayout ? true : Attrib::Collection::Contains(currentCollection, 0, def->mKey);
+        if (!isInCurrentCollection) {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, colorNotExisting);
+        }
 
         if (notAnArray) {
             ImGui::TableNextRow();
@@ -531,11 +710,6 @@ namespace AttribEditor {
         if (notAnArray) ImGui::TextUnformatted((arrayIndex < 0 ? attributeName : arrayIndexBuf));
         ImGui::TableNextColumn();
 
-        bool supported = true;
-        bool isInCurrentCollection = Attrib::Collection::Contains(currentCollection, 0, def->mKey);
-        if (!isInCurrentCollection) {
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, colorNotExisting);
-        }
 
         ImGui::SetNextItemWidth(-FLT_MIN);
 
@@ -750,6 +924,39 @@ namespace AttribEditor {
         }
         break;
 
+        case GCollectionKey: {
+            DWORD key = *(DWORD*)data;
+
+            if (!GCollectionKeysInitialized) InitGCollectionKeys();
+
+            char stringBuf[100];
+            if (GCollectionKeys[key]) snprintf(stringBuf, sizeof(stringBuf), GCollectionKeys[key]);
+            else snprintf(stringBuf, sizeof(stringBuf), "0x%08x", key);
+
+
+            float width = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(2* width / 3);
+            if (ImGui::InputText("", stringBuf, sizeof(stringBuf), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if (stringBuf[0] == '0' && stringBuf[1] == 'x') *(DWORD*)data = strtoul(stringBuf, NULL, 16);
+                else *(DWORD*)data = getVltHash(stringBuf);
+                
+                auto arr = new char[strlen(stringBuf) + 1];
+                strncpy_s(arr, strlen(stringBuf) + 1, stringBuf, sizeof(stringBuf));
+                GCollectionKeys[*(DWORD*)data] = arr;
+
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << stringBuf << "\n";
+            }
+            ImGui::SetNextItemWidth(width / 3);
+            ImGui::SameLine();
+            ImGui::PushID(1);
+            if (ImGui::Button("Go to collection")) {
+                *nextCollection = Attrib::FindCollection(getVltHash("gameplay"), key, 0);
+            }
+            ImGui::PopID();
+
+        } break;
+
         case AttribTypes::type_bStringHash:
         {
             EditBStringHash(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
@@ -776,7 +983,7 @@ namespace AttribEditor {
 
         case AttribTypes::Vector4:
         {
-            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 4, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 4, (void*)(&one_f), (void*)(&ten_f), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
             if (result & (1 << 0)) {
                 WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
                 modscript << "X " << ((float*)data)[0] << "\n";
@@ -798,7 +1005,7 @@ namespace AttribEditor {
 
         case AttribTypes::Vector3:
         {
-            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 3, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 3, (void*)(&one_f), (void*)(&ten_f), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
             if (result & (1 << 0)) {
                 WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
                 modscript << "X " << ((float*)data)[0] << "\n";
@@ -816,7 +1023,7 @@ namespace AttribEditor {
 
         case AttribTypes::Vector2:
         {
-            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 2, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+            int result = ImGui::InputScalarN("", ImGuiDataType_Float, (float*)data, 2, (void*)(&one_f), (void*)(&ten_f), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
             if (result & (1 << 0)) {
                 WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
                 modscript << "X " << ((float*)data)[0] << "\n";
@@ -833,7 +1040,7 @@ namespace AttribEditor {
             for (int i = 0; i < 4; i++) {
                 ImGui::SetNextItemWidth(-FLT_MIN);
                 ImGui::PushID(i);
-                int result = ImGui::InputScalarN("", ImGuiDataType_Float, ((float*)data) + 4 * i, 4, (void*)(&one), (void*)(&ten), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
+                int result = ImGui::InputScalarN("", ImGuiDataType_Float, ((float*)data) + 4 * i, 4, (void*)(&one_f), (void*)(&ten_f), "%.3f", ImGuiInputTextFlags_AutoSelectAll);
                 for (int j = 0; j < 4; j++)
                     if (result & (1 << j)) {
                         WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
@@ -975,37 +1182,7 @@ namespace AttribEditor {
                 }
                 ImGui::TreePop();
             }
-            if (ImGui::TreeNode("Curve preview")) {
-                ImGui::Text("better than vlted huh");
-
-                float* xval = new float[curve->X.mLength];
-                float* yval = new float[curve->Y.mLength];
-
-                for (int i = 0; i < curve->X.mLength; i++) {
-                    xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
-                }
-                for (int i = 0; i < curve->Y.mLength; i++) {
-                    yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
-                }
-
-
-                if (ImPlot::BeginPlot("##GraphPreview")) {
-                    ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
-                    //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
-                    //    ImPlotProp_Marker, ImPlotMarker_Square,
-                    //    ImPlotProp_MarkerSize, 6,
-                    //    ImPlotProp_LineColor, GetColormapColor(1),
-                    //    ImPlotProp_FillColor, GetColormapColor(1),
-                    //    ImPlotProp_FillAlpha, 0.25f
-                    //    });
-                    ImPlot::EndPlot();
-                }
-
-                delete[] xval;
-                delete[] yval;
-                ImGui::TreePop();
-            }
-
+            PreviewCurve(curve, attributeName);
         }
         break;
 
@@ -1075,36 +1252,7 @@ namespace AttribEditor {
                     }
                     ImGui::TreePop();
                 }
-                if (ImGui::TreeNode("Curve preview")) {
-                    ImGui::Text("better than vlted huh");
-
-                    float* xval = new float[curve->X.mLength];
-                    float* yval = new float[curve->Y.mLength];
-
-                    for (int i = 0; i < curve->X.mLength; i++) {
-                        xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
-                    }
-                    for (int i = 0; i < curve->Y.mLength; i++) {
-                        yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
-                    }
-
-
-                    if (ImPlot::BeginPlot("##GraphPreview")) {
-                        ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
-                        //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
-                        //    ImPlotProp_Marker, ImPlotMarker_Square,
-                        //    ImPlotProp_MarkerSize, 6,
-                        //    ImPlotProp_LineColor, GetColormapColor(1),
-                        //    ImPlotProp_FillColor, GetColormapColor(1),
-                        //    ImPlotProp_FillAlpha, 0.25f
-                        //    });
-                        ImPlot::EndPlot();
-                    }
-
-                    delete[] xval;
-                    delete[] yval;
-                    ImGui::TreePop();
-                }
+                PreviewCurve(curve, attributeName);
 
 
 
@@ -1175,36 +1323,155 @@ namespace AttribEditor {
                     }
                     ImGui::TreePop();
                 }
-                if (ImGui::TreeNode("Curve preview")) {
-                    ImGui::Text("better than vlted huh");
+                PreviewCurve(curve, attributeName);
 
-                    float* xval = new float[curve->X.mLength];
-                    float* yval = new float[curve->Y.mLength];
 
-                    for (int i = 0; i < curve->X.mLength; i++) {
-                        xval[i] = (curve->xMin + (curve->xMax - curve->xMin) * curve->X.mArray[i]) * curve->graphScale; //NOT SURE ABOUT GRAPH SCALE
+
+
+                ImGui::TreePop();
+            }
+        }
+        break;
+
+
+        case AttribTypes::GlueCurve:
+        {
+            auto curve = (struct Curve*)data;
+
+            //this is stupid, doing it that way only because of vlted, all my homies hate vlted
+            if (ImGui::TreeNodeEx("Easy", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::PushID(1);
+                EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Easy_MinX", "Easy_MaxX");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(2);
+                EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Easy_MinY", "Easy_MaxY");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(3);
+                EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 1, "Easy_GraphScale");
+                ImGui::PopID();
+                if (ImGui::TreeNode("Graph data")) {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    float width = ImGui::CalcItemWidth() / 3;
+                    for (int i = 0; i < curve->X.mLength || i < curve->Y.mLength || i < curve->Y2.mLength; i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("");
+                        if (i < curve->X.mLength) {
+                            ImGui::PushID(1);
+                            ImGui::SameLine(0);
+                            ImGui::Text("X[%d]", i);
+                            //ImGui::SameLine(20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->X.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Easy_XValues " << i << " Value " << curve->X.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y.mLength) {
+                            ImGui::PushID(2);
+                            ImGui::SameLine(width);
+                            ImGui::Text("Y[%d]", i);
+                            //ImGui::SameLine(width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Easy_YValues " << i << " Value " << curve->Y.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y2.mLength) {
+                            ImGui::PushID(3);
+                            ImGui::SameLine(2 * width);
+                            ImGui::Text("Y2[%d]", i);
+                            //ImGui::SameLine(2* width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y2.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Easy_Y2Values " << i << " Value " << curve->Y2.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::PopID();
                     }
-                    for (int i = 0; i < curve->Y.mLength; i++) {
-                        yval[i] = (curve->yMin + (curve->yMax - curve->yMin) * curve->Y.mArray[i]) * curve->graphScale;
-                    }
-
-
-                    if (ImPlot::BeginPlot("##GraphPreview")) {
-                        ImPlot::PlotLine(attributeName, xval, yval, IM_MIN(curve->X.mLength, curve->Y.mLength));
-                        //ImPlot::PlotScatter("Data 2", xs2, ys2, 50, {
-                        //    ImPlotProp_Marker, ImPlotMarker_Square,
-                        //    ImPlotProp_MarkerSize, 6,
-                        //    ImPlotProp_LineColor, GetColormapColor(1),
-                        //    ImPlotProp_FillColor, GetColormapColor(1),
-                        //    ImPlotProp_FillAlpha, 0.25f
-                        //    });
-                        ImPlot::EndPlot();
-                    }
-
-                    delete[] xval;
-                    delete[] yval;
                     ImGui::TreePop();
                 }
+                PreviewCurve(curve, attributeName);
+
+
+
+
+                ImGui::TreePop();
+            }
+
+            curve = &curve[1]; //switch to Hard
+
+            if (ImGui::TreeNodeEx("Hard", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::PushID(1);
+                EditFloatN(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Hard_MinX", "Hard_MaxX");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(2);
+                EditFloatN(data + 8, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 2, "Hard_MinY", "Hard_MaxY");
+                ImGui::PopID();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::PushID(3);
+                EditFloatN(data + 16, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, 1, "Hard_GraphScale");
+                ImGui::PopID();
+                if (ImGui::TreeNode("Graph data")) {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    float width = ImGui::CalcItemWidth() / 3;
+                    for (int i = 0; i < curve->X.mLength || i < curve->Y.mLength || i < curve->Y2.mLength; i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("");
+                        if (i < curve->X.mLength) {
+                            ImGui::PushID(1);
+                            ImGui::SameLine(0);
+                            ImGui::Text("X[%d]", i);
+                            //ImGui::SameLine(20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->X.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Hard_XValues " << i << " Value " << curve->X.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y.mLength) {
+                            ImGui::PushID(2);
+                            ImGui::SameLine(width);
+                            ImGui::Text("Y[%d]", i);
+                            //ImGui::SameLine(width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Hard_YValues " << i << " Value " << curve->Y.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        if (i < curve->Y2.mLength) {
+                            ImGui::PushID(3);
+                            ImGui::SameLine(2 * width);
+                            ImGui::Text("Y2[%d]", i);
+                            //ImGui::SameLine(2* width + 20.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(width - 20.0f);
+                            if (ImGui::InputFloat("", &curve->Y2.mArray[i])) {
+                                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                                modscript << "Hard_Y2Values " << i << " Value " << curve->Y2.mArray[i] << "\n";
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+                PreviewCurve(curve, attributeName);
 
 
 
@@ -1382,6 +1649,8 @@ namespace AttribEditor {
 
             EditRefSpec(data + 4, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, nextCollection, "2", "3", false);
 
+            PreviewSwatch(data+16);
+
             ImGui::SetNextItemWidth(totalWidth / 2);
             ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
             ImGui::SetNextItemWidth(totalWidth / 2);
@@ -1494,85 +1763,116 @@ namespace AttribEditor {
             ImGui::SetNextItemWidth(totalWidth / 2);
             if (ImGui::InputScalar("##shear", ImGuiDataType_S8, (INT8*)(data + 14))) edited = true;
 
-            if (ImGui::TreeNode("Color0")) {
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 16))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 17))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 18))) edited = true;
-
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNode("Color1")) {
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 19))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 20))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 21))) edited = true;
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNode("Color2")) {
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 22))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 23))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 24))) edited = true;
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNode("Color3")) {
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Swatch"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##swatch", ImGuiDataType_S8, (UINT8*)(data + 25))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Saturation"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##sat", ImGuiDataType_S8, (UINT8*)(data + 26))) edited = true;
-
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                ImGui::Text("Brightness"); ImGui::SameLine(totalWidth / 2);
-                ImGui::SetNextItemWidth(totalWidth / 2);
-                if (ImGui::InputScalar("##bright", ImGuiDataType_S8, (UINT8*)(data + 27))) edited = true;
-                ImGui::TreePop();
-            }
-
+            EditColorPacked("Color0", data + 16, totalWidth, edited);
+            EditColorPacked("Color1", data + 19, totalWidth, edited);
+            EditColorPacked("Color2", data + 22, totalWidth, edited);
+            EditColorPacked("Color3", data + 25, totalWidth, edited);
 
             if (edited)  for (int i = 0; i < 7; i++) {
                 WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
                 modscript << (i + 1) << " 0x";
                 modscript << ((DWORD**)data)[i] << "\n";
             }
+
+        } break;
+
+        case DecalLayer: //vlted is unable to edit this at all
+        case DecalLayer_: {
+            bool edited = false;
+
+            auto totalWidth = ImGui::CalcItemWidth();
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("PartNameHash"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            EditBStringHash(data, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, NULL, false);
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Mirrored"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::Checkbox("##mirror", (bool*)(data + 4))) edited = true;
+
+            //VinylsAttrib::VinylTransform
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("TranslationX"); ImGui::SameLine(totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##tx", ImGuiDataType_S16, (INT16*)(data + 6))) edited = true;
+            ImGui::SameLine(2 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("TranslationY"); ImGui::SameLine(3 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##ty", ImGuiDataType_S16, (INT16*)(data + 8))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Rotation"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::InputScalar("##rot", ImGuiDataType_S8, (INT8*)(data + 10))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("ScaleX"); ImGui::SameLine(totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##sx", ImGuiDataType_S8, (INT8*)(data + 11))) edited = true;
+            ImGui::SameLine(2 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            ImGui::Text("ScaleY"); ImGui::SameLine(3 * totalWidth / 4);
+            ImGui::SetNextItemWidth(totalWidth / 4);
+            if (ImGui::InputScalar("##sy", ImGuiDataType_S8, (INT8*)(data + 12))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("ProportionalScale"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::Checkbox("##proportional", (bool*)(data + 13))) edited = true;
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Shear"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::InputScalar("##shear", ImGuiDataType_S8, (INT8*)(data + 14))) edited = true;
+
+            //VinylsAttrib::VinylColor
+            EditColorPacked("Color", data + 16, totalWidth, edited);
+
+            //probably does not work!
+            //if (edited)  for (int i = 0; i < 5; i++) {
+            //    WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+            //    modscript << (i + 1) << " 0x";
+            //    modscript << ((DWORD**)data)[i] << "\n";
+            //}
+
+        } break;
+
+        case CarPaintSwatch: {
+            struct CarPaintSwatch* cps = (struct CarPaintSwatch*)data;
+                
+            auto totalWidth = ImGui::CalcItemWidth();
+
+            float rgb[3]; //BGR
+            rgb[0] = 1.0f / 255.0f * ((cps->rgb >> 16) & 0xFF);
+            rgb[1] = 1.0f / 255.0f * ((cps->rgb >> 8) & 0xFF);
+            rgb[2] = 1.0f / 255.0f * ((cps->rgb >> 0) & 0xFF);
+
+
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            ImGui::Text("Color"); ImGui::SameLine(totalWidth / 2);
+            ImGui::SetNextItemWidth(totalWidth / 2);
+            if (ImGui::ColorEdit3("##color", rgb)) {
+                cps->rgb = (
+                    0xFF << 24
+                    | ((UINT)IM_F32_TO_INT8_SAT(rgb[0])) << 16
+                    | ((UINT)IM_F32_TO_INT8_SAT(rgb[1])) << 8
+                    | ((UINT)IM_F32_TO_INT8_SAT(rgb[2])) << 0
+                    );
+
+                WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
+                modscript << "RGB 0x";
+                modscript << (DWORD*)cps->rgb << "\n";
+            }
+
+            EnumCombo((int)& cps->material_a, "ePaintMaterialWhite\0ePaintMaterialSilver\0ePaintMaterialBlack\0ePaintMaterialRed\0ePaintMaterialViolet\0ePaintMaterialIndigo\0ePaintMaterialBlue\0ePaintMaterialGreen\0ePaintMaterialYellow\0ePaintMaterialOrange",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "MaterialA");
+            EnumCombo((int)&cps->material_b, "ePaintMaterialWhite\0ePaintMaterialSilver\0ePaintMaterialBlack\0ePaintMaterialRed\0ePaintMaterialViolet\0ePaintMaterialIndigo\0ePaintMaterialBlue\0ePaintMaterialGreen\0ePaintMaterialYellow\0ePaintMaterialOrange",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "MaterialB");
+            EditFloat((int)&cps->blend, className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "Blend");
+            EnumFlags((int)&cps->speechColour, "Invalid_Type_car_color\0Type_car_color_Red\0Type_car_color_Black\0Type_car_color_White\0Type_car_color_Blue\0Type_car_color_Green\0Type_car_color_Orange\0Type_car_color_Silver\0Type_car_color_Gold\0Type_car_color_Purple\0Type_car_color_Brown\0Type_car_color_Yellow\0Type_car_color_Pink\0Type_car_color_Beige\0Type_car_color_No_colour",
+                className, collectionName, attributeName, arrayIndex, arrayIndexBuf, "SpeechColour");
 
         } break;
 
@@ -1834,7 +2134,7 @@ namespace AttribEditor {
                 ImGui::Text("Collection");
                 static char collectionKeyBuf[100];
 
-                if (AttribCollections[*collectionKey] != NULL) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", AttribCollections[*collectionKey]);
+                if (GetCollectionName(getVltHash(RefSpecClassName), *collectionKey)) snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "%s", GetCollectionName(getVltHash(RefSpecClassName), *collectionKey));
                 else snprintf(collectionKeyBuf, sizeof(collectionKeyBuf), "0x%08x", *collectionKey);
 
                 ImGui::SetNextItemWidth(width / 3);
@@ -1845,7 +2145,7 @@ namespace AttribEditor {
                 if (ImGui::InputText("", collectionKeyBuf, sizeof(collectionKeyBuf), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (collectionKeyBuf[0] == '0' && collectionKeyBuf[1] == 'x') *collectionKey = strtoul(collectionKeyBuf, NULL, 16);
                     else *collectionKey = getVltHash(collectionKeyBuf);
-                    *collectionPtr = (DWORD)Attrib::FindCollection(getVltHash((char*)RefSpecClassName), *collectionKey, 0);
+                    *collectionPtr = (DWORD)Attrib::FindCollection(getVltHash(RefSpecClassName), *collectionKey, 0);
                     WriteModscriptHeader(className, collectionName, attributeName, arrayIndex, arrayIndexBuf);
                     modscript << "Collection" << " " << collectionKeyBuf << "\n";
                 }
@@ -1853,7 +2153,7 @@ namespace AttribEditor {
                 ImGui::SetNextItemWidth(width / 3);
                 ImGui::SameLine(2 * width / 3);
                 if (ImGui::Button("Go to collection")) {
-                    *nextCollection = Attrib::FindCollection(getVltHash((char*)RefSpecClassName), *collectionKey, 0);
+                    *nextCollection = Attrib::FindCollection(getVltHash(RefSpecClassName), *collectionKey, 0);
                 }
 
             }
@@ -1916,7 +2216,7 @@ namespace AttribEditor {
             ImGui::PopStyleColor();
             ImGui::SameLine();
         }
-        else {
+        else if (!(def->mFlags & Attrib::Definition::Flags::kInLayout)) {
             if (ImGui::Button("Remove")) {
                 Attrib::Collection::RemoveAttribute(currentCollection, 0, def->mKey);
                 modscript << "delete_field " << className << " " << collectionName << " " << attributeName << "\n";
@@ -1948,6 +2248,11 @@ namespace AttribEditor {
         if (currentCollection == NULL || def == NULL) return;
 
         DWORD key = def->mKey;
+
+
+        if (HideHeritedAttributes && !(def->mFlags & Attrib::Definition::Flags::kInLayout) && !Attrib::Collection::Contains(currentCollection, 0, def->mKey)) {
+            return;
+        }
 
         //Attrib::Node* node = Attrib::Collection::GetNode(col, 0, key, &key);
 
@@ -2018,6 +2323,7 @@ namespace AttribEditor {
             if (node != NULL) {
                 Attrib::Array* arr;
                 if (!(node->mFlags & Attrib::Node::Flags::InLayout)) {
+
                     if (!(node->mFlags & Attrib::Node::Flags::Static)) {
                         arr = (Attrib::Array*)node->mPtr;
                     }
@@ -2055,21 +2361,22 @@ namespace AttribEditor {
 
         }
         else {
-            //if (def->mFlags & Attrib::Definition::Flags::kInLayout) {
-            //    //in layout
-            //    EditAttrib(className, collectionName, col->mLayout + def->mOffset, def);
-            //}
-            //else {
+            if (def->mFlags & Attrib::Definition::Flags::kInLayout) {
+                //in layout
+                //fix frontend and emitterdata
+                EditAttrib(className, collectionName, attributeName, currentCollection->mLayout + def->mOffset, def, currentCollection, nextCollection, -1);
+            }
+            else {
                 //collection data
             EditAttrib(className, collectionName, attributeName, Attrib::Collection::GetData(currentCollection, 0, def->mKey, 0), def, currentCollection, nextCollection, -1); //GetData works for anything that's cool
 
-            //}
+            }
         }
         ImGui::PopID();
     }
 
-#define CollectionName 0x9CA1C8F9
-#define PrevNextStackSize 32
+constexpr auto PrevNextStackSize = 32;
+
     static Attrib::Collection* PrevNextStack[PrevNextStackSize];
     static UINT PrevNextStackPos = 0;
 
@@ -2083,12 +2390,26 @@ namespace AttribEditor {
 
     void DisplayChildrenRecursive(Attrib::Class* clazz, Attrib::Collection* parent, Attrib::Collection** selected) {
 
+        int NameDefOffset = -1;
+
+        //slower method for cases where CollectionName exists but attrib cannot find it for some fucking reason
+        for (int i = 0; i < clazz->mPrivates->mNumDefinitions; i++) {
+            if (clazz->mPrivates->mDefinitions[i].mKey == CollectionName && clazz->mPrivates->mDefinitions[i].mFlags & Attrib::Definition::Flags::kInLayout) {
+                NameDefOffset = clazz->mPrivates->mDefinitions[i].mOffset;
+                break;
+            }
+        }
+
         for (int i = 0; i < clazz->mPrivates->mCollections.__inherit_0.mTableSize; i++) {
             auto chi = Attrib::FindCollection(clazz->mKey, clazz->mPrivates->mCollections.__inherit_0.mTable[i].mKey, NULL);
             if (chi != NULL && chi->mParent == parent) {
                 char buf[64];
                 char** colName;
-                if ((colName = (char**)Attrib::Collection::GetData(chi, 0, CollectionName, 0)) && *colName && **colName) {
+
+                if (NameDefOffset != -1) colName = (char**)(chi->mLayout + NameDefOffset);
+                else (colName = (char**)Attrib::Collection::GetData(chi, 0, CollectionName, 0));
+
+                if (colName && *colName && **colName) {
                     snprintf(buf, sizeof(buf), *colName);
                 }
                 else if (AttribCollections[chi->mKey] != NULL) {
@@ -2108,6 +2429,20 @@ namespace AttribEditor {
                 tree_flags |= ImGuiTreeNodeFlags_DrawLinesToNodes;      // Always draw hierarchy outlines
                 if (chi == *selected)
                     tree_flags |= ImGuiTreeNodeFlags_Selected;          // Draw selection highlight
+                //test for children
+                bool isLeaf = true;
+                for (int i = 0; i < clazz->mPrivates->mCollections.__inherit_0.mTableSize; i++) {
+                    auto chichi = Attrib::FindCollection(clazz->mKey, clazz->mPrivates->mCollections.__inherit_0.mTable[i].mKey, NULL);
+                    if (chichi != NULL && chichi->mParent == chi) {
+                        isLeaf = false;
+                        break;
+                    }
+                }
+                if (isLeaf) {
+                    tree_flags |= ImGuiTreeNodeFlags_Leaf;
+                    //tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                }
+
                 //if (node->Childs.Size == 0)
                 //    tree_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen; // Use _NoTreePushOnOpen + set is_open=false to avoid unnecessarily push/pop on leaves.
                 //if (node->DataMyBool == false)
@@ -2231,8 +2566,8 @@ namespace AttribEditor {
     void ShowAttribEditor(bool* doAttribEditor) {
 
         if (ImGui::Begin("Attrib editor", doAttribEditor)) {
-            Attrib::ClassTable__Node* classTable = *(Attrib::ClassTable__Node**)(*(DWORD*)(*DatabasePrivate + 0x4) + 0x8);
-            auto classTableCount = (UINT16*)(*(DWORD*)(*DatabasePrivate + 0x4) + 0x8 + 0x4); //0x4 TableSize, 0x6 NumEntries
+            Attrib::ClassTable__Node* classTable = *(Attrib::ClassTable__Node**)(*(DWORD*)(*Attrib::DatabasePrivate + 0x4) + 0x8);
+            auto classTableCount = (UINT16*)(*(DWORD*)(*Attrib::DatabasePrivate + 0x4) + 0x8 + 0x4); //0x4 TableSize, 0x6 NumEntries
 
             static Attrib::Collection* col = NULL; //selected
             static char FilterBuf[100];
@@ -2338,7 +2673,10 @@ namespace AttribEditor {
 
                 ImGui::BeginGroup(); // Lock X position
 
-                ImGui::Text("Warning: this may edit parent Attrib nodes!");
+                ImGui::Text("Warning: this may cause instabilities and unwanted changes!");
+
+                ImGui::SameLine(); ImGui::Checkbox("Hide inherited attributes", &HideHeritedAttributes);
+                ImGui::SameLine(); ImGui::Checkbox("Hide empty attributes", &HideEmptyAttributes);
 
                 if (ImGui::TreeNode("Go to...")) {
                     static char gotoclassBuf[64], gotocollBuf[100];
