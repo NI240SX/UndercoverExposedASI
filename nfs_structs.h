@@ -1627,15 +1627,15 @@ struct SunAndSky {
     float mFogFarOverride; /* //T_REAL32 */
     int mLensFlareIndex; /* //T_UINT4 */
     float mSkyDomeRotation; /* //T_REAL32 */
+    float nextSkyDomeRotation;
     float mSpecularSize; /* //T_REAL32 */
     float mRoadSpecularSize; /* //T_REAL32 */
     float mSpecularIntensity; /* //T_REAL32 */
+    float field_0x144;
+    undefined4 field_0x148;
+    undefined4 field_0x14c;
     struct bVector4 mSpecularColourAndIntensity; /* //bVector4 */
     struct bVector4 mWorldAndRoadSpecularSizes; /* //bVector4 */
-    float field40_0x160;
-    float field41_0x164;
-    undefined4 field42_0x168;
-    undefined4 field43_0x16c;
     struct bVector4 mRoadReflectionParams; /* //bVector4 */
     float mShadowMixAmount; /* //T_REAL32 */
     float mShadowSoftness; /* //T_REAL32 */

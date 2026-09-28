@@ -27,11 +27,15 @@ namespace Settings {
     static int IndexBufferSize = 0x50000;
     static int CarsPoolSize = 0x4e20000;
 
+    double TimeOfDay = 0;
+    //double TimeOfDaySpeed = 1.0;
     static bool useDayNightCycle = false;
     static bool DayNightCycleRandomStart = true;
     static vector<vector<uint32_t>> VisualStyleCycles;
     static int DayNightCycleDuration = 24 * 60;
+	static bool SetMissionTime = true;
     //static int DayNightCycleDuration = 10;
+
     static bool SkipBootupChecks = true;
 
     static bool HeadlightTweaksEnabled = false;
@@ -64,8 +68,10 @@ namespace Settings {
     static eMusicBitfields currentBitfield = RACE;
 
     static bool AddDecalsSelection = false;
-
+    
 	static bool AllowPerformanceDowngrade = false;
+
+	static bool FixGPSPath = false;
 
     static bool tests = false;
 
@@ -298,6 +304,7 @@ LastGoodGlobalB = 1242129289
 [Features: Miscellaneous]
 KitRideHeightEnabled = 1                //enables per-kit ride height on some cars
 SkipBootupChecks = 1                    //skips some unnecessary bootup checks
+FixGPSPath = 0                          //fix gps path disappearing when engaging a pursuit mid-race (1.18 only)
 EnableAllCameras = 0                    //allows to pick any of the nine vanilla cameras: POV_BUMPER/HOOD, POV_OUTSIDE_CLOSE/FAR/DRIFT/STAGING/PAUSE/SLOTCAR/TUNING
 EnableOverlay = 0                       //enables an in-game overlay - most features are only in TESTS
 ShowOverlayOnGameStart = 0              //shows the overlay on game bootup - else use Ctrl + Delete to bring it up
@@ -329,6 +336,7 @@ MissShiftEffect = MissShiftEffect       //ecar field or emittergroup node to use
 
 [Features: Day and Night Cycle]
 DayNightCycleEnabled = 0                //enables the day and night cycle
+SetMissionTime = 1                      //forces the time of day to the mission's announced time
 DayNightCycleRandomStart = 1            //starts the cycle at a random time instead of its beginning
 DayNightCycleDuration = 1440            //total cycle duration in seconds, default is 1440 (24 minutes)
 DayNightCycle = [ [sunny6_0,sunny4_22.5,sunny2_45,lessnukedsunny_90,wet_135,wet2_150,wet3_180,wet_180,sunny7_180,sunset_180,sunset3_180,night_4_180,night_2_210,night_3_240,night_7_270,night_1_300,night_6_330,night_5_360]]
@@ -398,6 +406,7 @@ AftermarketMenuOption = 0x5D, Trunk
                 getConfigSetting("DayNightCycleDuration", line, &Settings::DayNightCycleDuration);
                 getConfigSetting("DayNightCycleRandomStart", line, &Settings::DayNightCycleRandomStart);
                 getConfigSettingVltHash2DArray("DayNightCycle", line, &Settings::VisualStyleCycles);
+				getConfigSetting("SetMissionTime", line, &Settings::SetMissionTime);
 
                 getConfigSetting("HeadlightTweaksEnabled", line, &HeadlightTweaksEnabled);
                 getConfigSetting("AutomaticHeadlights", line, &AutomaticHeadlights);
@@ -439,8 +448,8 @@ AftermarketMenuOption = 0x5D, Trunk
                 getConfigSetting("FreeroamMusicType", line, (int*)&currentBitfield);
 
                 getConfigSetting("RestoreDecalsEditing", line, &AddDecalsSelection);
-
 				getConfigSetting("AllowPerformanceDowngrade", line, &AllowPerformanceDowngrade);
+				getConfigSetting("FixGPSPath", line, &FixGPSPath);
 
                 getConfigSetting("TESTS", line, &tests);
             }
@@ -460,7 +469,11 @@ AftermarketMenuOption = 0x5D, Trunk
         }
 
         if (DayNightCycleRandomStart) {
+            std::uniform_int_distribution<> distribOffsetTOD(0, DayNightCycleDuration);
+            TimeOfDay = distribOffsetTOD(gen) * (24.0 / Settings::DayNightCycleDuration);
 
+            //old method
+            /*
             std::uniform_int_distribution<> distribOffsetTOD(0, VisualStyleCycles[0].size() - 1);
             int randint = distribOffsetTOD(gen);
 
@@ -475,7 +488,7 @@ AftermarketMenuOption = 0x5D, Trunk
                 }
 
                 delete newCycle;
-            }
+            }*/
         }
 
         if (SliderEnhancements) {

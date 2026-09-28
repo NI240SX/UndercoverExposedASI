@@ -39,6 +39,7 @@ DWORD* FEAutosculptScreen;
 DWORD* DebugVehicleSelection;
 
 int* timer_world;
+float* FrameTime;
 
 SunAndSky* theSunAndSky;
 
@@ -134,6 +135,7 @@ namespace MiscGameFuncs {
             theSunAndSky = (SunAndSky*)0x00d5ea40;
 
             timer_world = (int*)0x00da531c;
+            FrameTime = (float*)0x00da52f0;
 			break;
 		case UC_1_21:
             getVltHash = reinterpret_cast<decltype(getVltHash)>(0x0045cb10);
@@ -190,6 +192,7 @@ namespace MiscGameFuncs {
             theSunAndSky = (SunAndSky*)0x0126f100;
 
             timer_world = (int*)0x012b6450;
+            FrameTime = (float*)0x012b6030;
 			break;
 		}
 

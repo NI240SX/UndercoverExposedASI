@@ -127,13 +127,11 @@ namespace Overlay {
                     ImGui::InputText("##presetridename", presetRideName, sizeof(presetRideName));
                     ImGui::SetNextItemWidth(width);
                     if (ImGui::Button("Export current PresetRide")) {
-                        void* RideInfo = ucetesting::FECarHeaven_GetRideInfo(*FECarHeaven);
-                        ucetesting::DoExportPresetRide(RideInfo, presetRideName);
+                        ucetesting::DoExportPresetRide(presetRideName);
                     }
                     ImGui::SetNextItemWidth(width);
                     if (ImGui::Button("Replace car with PresetRide")) {
-                        void* RideInfo = ucetesting::FECarHeaven_GetRideInfo(*FECarHeaven);
-                        ucetesting::DoReplacePresetRide(RideInfo, presetRideName);
+                        ucetesting::DoReplacePresetRide(presetRideName);
                     }
                 }
 
@@ -228,7 +226,7 @@ namespace Overlay {
                         sunSkyDesiredKey = getVltHash(sunSkyDesiredKeyBuf);
                         theSunAndSky->mDesiredKey = sunSkyDesiredKey;
                     }
-                    ImGui::InputFloat("mBlendAmount", &theSunAndSky->mBlendAmount, 0.001f, 0.01f);
+                    ImGui::SliderFloat("mBlendAmount", &theSunAndSky->mBlendAmount, 0.0f, 1.0f);
 
                     ImGui::Checkbox("Prevent automatic changing", &preventZoneChange);
 
@@ -268,7 +266,11 @@ namespace Overlay {
                 }
 
                 if (ImGui::TreeNode("Current zone_visual_style")) {
-                    ImGui::Text("Warning: this may edit parent Attrib nodes!");
+
+                    //ImGui::Text("Warning: this may cause instabilities and unwanted changes!");
+
+                    ImGui::Checkbox("Hide inherited attributes", &AttribEditor::HideHeritedAttributes);
+                    ImGui::SameLine(); ImGui::Checkbox("Hide empty attributes", &AttribEditor::HideEmptyAttributes);
 
                     Attrib::Gen::zone_visual_style current;
 
@@ -327,8 +329,13 @@ namespace Overlay {
                 }
 
                 if (Settings::useDayNightCycle && ImGui::TreeNode("UCE day/night cycle")) {
-                    if (ImGui::InputInt("Cycle duration", &Settings::DayNightCycleDuration, 1, 100, ImGuiInputTextFlags_AutoSelectAll)) DayNight::timePerZone = (float)Settings::DayNightCycleDuration / Settings::VisualStyleCycles[DayNight::currentWeatherSet].size();
-                    ImGui::InputFloat("Time per zone", &DayNight::timePerZone, 1.0f, 100.0f, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+                    //if (ImGui::InputDouble("Time of day (sec)", &Settings::TimeOfDay, 1000.0, 10000.0, "%.0f", ImGuiInputTextFlags_AutoSelectAll)) ((bVector4*)theSunAndSky->mZoneBlender)->y = 0.0f;
+                    static double zero_d = 0.0;
+                    static double max = DayNight::TIME_OF_DAY_LENGTH;
+                    //if (ImGui::DragScalar("Time of day (hours)", ImGuiDataType_Double, &Settings::TimeOfDay, 1.0f, &zero_d, &max)) ((bVector4*)theSunAndSky->mZoneBlender)->y = 0.0f;
+                    if (ImGui::SliderScalar("Time of day (hours)", ImGuiDataType_Double, &Settings::TimeOfDay, &zero_d, &max)) ((bVector4*)theSunAndSky->mZoneBlender)->y = 0.0f;
+                    ImGui::InputFloat("Time per zone (hours)", &DayNight::timePerZone, 1.0f, 100.0f, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+                    if (ImGui::InputInt("Cycle duration (sec)", &Settings::DayNightCycleDuration, 1, 100, ImGuiInputTextFlags_AutoSelectAll)) DayNight::timePerZone = (float)Settings::DayNightCycleDuration / Settings::VisualStyleCycles[DayNight::currentWeatherSet].size();
                     if (ImGui::InputInt("Current weather set", &DayNight::currentWeatherSet, 1, 1, ImGuiInputTextFlags_AutoSelectAll)) DayNight::currentWeatherSet %= Settings::VisualStyleCycles.size();
                     ImGui::TreePop();
                 }

@@ -859,7 +859,11 @@ namespace ucetesting {
     DWORD VinylSystem__VinylManager = 0x01270694;
 
 
-    void DoReplacePresetRide(void* RideInfo, char* presetName) {
+    void DoReplacePresetRide(char* presetName) {
+
+        void* RideInfo = ucetesting::FECarHeaven_GetRideInfo(*FECarHeaven);
+
+        //started crashing in render thread ???
         unsigned char VehCustBuf[0x9ec];
         unsigned char* VehicleCustomizations = VehCustBuf;
 
@@ -880,7 +884,9 @@ namespace ucetesting {
         Attrib::Instance::destructor(&presetride);
     }
 
-    void DoExportPresetRide(unsigned char* RideInfo, char* presetName) {
+    void DoExportPresetRide(char* presetName) {
+
+        unsigned char* RideInfo = (unsigned char*)ucetesting::FECarHeaven_GetRideInfo(*FECarHeaven);
 
         unsigned char VehCustBuf[0x9ec];
         unsigned char* VehicleCustomizations = VehCustBuf;
@@ -1104,9 +1110,6 @@ namespace ucetesting {
         //ignore decal layers (unsupported by vlted)
 
         modscript.flush();
-    }
-    void DoExportPresetRide(void* RideInfo, char* presetName) {
-        DoExportPresetRide((unsigned char*)RideInfo, presetName);
     }
 
     //ok
@@ -2054,6 +2057,9 @@ namespace ucetesting {
 
             utils::nop(0x00a07469, 2); //force allocator auto validate
             utils::nop(0x00a07176, 2);
+
+
+
         }
         break;
         default:

@@ -829,61 +829,7 @@ BOOL APIENTRY DllMain( HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReser
 #endif //verbose
 
 #if 1 // Day/night cycle
-        if (carsModuleInstalled && Settings::useDayNightCycle) switch (entry) {
-            using namespace DayNight;
-        case UC_1_0: //UC 1.0
-            timePerZone = (float)Settings::DayNightCycleDuration / Settings::VisualStyleCycles[0].size();
-
-
-            //updateFirstVisualStyleReturn = (void*)(0x00875df6);
-            //updateNextVisualStyleReturn = (void*)(0x00875ef8);
-
-            //dat_012fa474 = *(DWORD*)0x00de93dc;
-            //dat_012fa46c = *(DWORD*)0x00de93d4;
-            //dat_00b694d0 = *(DWORD*)0x00bd9c80;
-            float_1 = (float*)*(DWORD*)0x00bd97b0; //1.0f constant
-
-            //transitionPercentageDetourReturn = (void*)0x00875e69;
-            //findTransitionPercentage = reinterpret_cast<decltype(//findTransitionPercentage)>(0x00863fe0);
-
-            //utils::jump(0x00875dea, updateFirstVisualStyle); //getting into free roam
-            //utils::jump(0x00875eec, updateNextVisualStyle); //general update
-
-            utils::call(0x00875de2, getNextVisualStyle); //replace Attrib::StringToKey
-            utils::call(0x00875ee4, getNextVisualStyle); //replace Attrib::StringToKey
-
-            //utils::jump(0x008720c0, findTransitionSpeedMult); //return 1.0f for transition duration (at least this was responsible for no transition when car no move)
-            utils::call(0x00875e58, ret1f);
-            utils::call(0x00875f25, getTransitionTime);
-            //utils::jump(0x00875e64, transitionPercentageDetour); //force transition time
-
-            break;
-        case UC_1_21: //UC 1.0.1.18
-            timePerZone = (float)Settings::DayNightCycleDuration/ Settings::VisualStyleCycles[0].size();
-
-            //updateFirstVisualStyleReturn = (void*)(0x008466ee);
-            //updateNextVisualStyleReturn = (void*)(0x008467da);
-
-            //dat_012fa474 = *(DWORD*)0x012fa474;
-            //dat_012fa46c = *(DWORD*)0x012fa46c;
-            //dat_00b694d0 = *(DWORD*)0x00b694d0;
-            float_1 = (float*)*(DWORD*)0x00b647b4;
-
-            //transitionPercentageDetourReturn = (void*)0x00846756;
-            //findTransitionPercentage = reinterpret_cast<decltype(//findTransitionPercentage)>(0x008354c0); //VisualLookEffectTarget::Update
-
-            //utils::jump(0x008466e2, updateFirstVisualStyle); //getting into free roam
-            //utils::jump(0x008467ce, updateNextVisualStyle); //general update
-
-            utils::call(0x008466da, getNextVisualStyle); //replace Attrib::StringToKey
-            utils::call(0x008467c6, getNextVisualStyle); //replace Attrib::StringToKey
-
-            //utils::jump(0x008428e0, findTransitionSpeedMult); //return 1.0f for transition duration (at least this was responsible for no transition when car no move)
-            utils::call(0x00846745, ret1f);
-            utils::call(0x00846807, getTransitionTime);
-            //utils::jump(0x00846751, transitionPercentageDetour); //force transition time
-            break;
-        }
+        if (carsModuleInstalled && Settings::useDayNightCycle) DayNight::Inject();
 #endif // Day/night cycle
 
 #if 1 // Per kit ride height (bit goofy but works)
@@ -1198,6 +1144,11 @@ BOOL APIENTRY DllMain( HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReser
             utils::jump(0x004a5050, Sound__MusicLogic__Ready);
 
             utils::set<char>(0x0057f6cb, 0xeb); //jmp instead of jnz for chyron music
+
+            utils::jump(0x0048f7c8, TransitionStopChyron);
+
+            utils::call(0x004687db, GetRaceTracks_wrapper_chyron); //RaceMusic
+            utils::call(0x0046f446, GetRaceTracks_wrapper_chyron); //RaceInit
             break;
 
         case UC_1_0:
@@ -1224,6 +1175,11 @@ BOOL APIENTRY DllMain( HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReser
             utils::jump(0x004ae010, Sound__MusicLogic__Ready);
 
             utils::set<char>(0x005a165b, 0xeb); //jmp instead of jnz for chyron music
+
+            utils::jump(0x00497788, TransitionStopChyron);
+
+            utils::call(0x0046ef9b, GetRaceTracks_wrapper_chyron); //RaceMusic
+            utils::call(0x00475ec6, GetRaceTracks_wrapper_chyron); //RaceInit
             break;
         }
 
@@ -1250,6 +1206,13 @@ BOOL APIENTRY DllMain( HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReser
             break;
         }
 
+        if (Settings::FixGPSPath) {
+            switch (entry) {
+            case UC_1_21:
+                utils::set<char>(0x005a88fb, 0xeb); //fix gps path disappearing when engaging a pursuit mid-race
+                break;
+            }
+        }
     } //dllmain
 
 

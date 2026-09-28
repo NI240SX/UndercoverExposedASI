@@ -193,6 +193,40 @@ namespace FreeroamMusic {
             //!Sound__MusicLogic__CheckInteractiveToFEStateTrans_004a3750(_this, 0, 10) && 
             NeedsInit
             ) {
+            /*
+            PAUSE	1	
+            ATTACHED	2	
+            EVENT_PENDING	4	
+            SWAP_PENDING	8	
+            INTERRUPT	16	
+            STOP	32	
+            JUMP	64	
+            GAME_EVENT_WIN	128	
+            GAME_EVENT_LOSE	256	
+            GAME_TERMINATE	512	
+            WAIT	1024	
+            WAIT_SONG_CB	2048	
+            RESTART	4096	
+            CREDITS	8192	
+            ZERO_VOL	16384	
+            END_MISSION	32768	
+            RESTART_RACE	65536	
+            BUSTED	131072	
+            CUSTOM	262144	
+            SUSPEND_CUSTOM	524288	
+            AUDITION	1048576	
+            CHYRON_PENDING	2097152	
+            LOADING_MUSIC	4194304	
+            HALT	8388608	
+            */
+
+
+
+
+
+
+
+
             *Music_PathfinderControl = *Music_PathfinderControl & 0xffffefff;
             //printf("trying to do the troll\n");
 
@@ -202,7 +236,7 @@ namespace FreeroamMusic {
                 index = forceNextSongIndex;
             }
 
-            *SkipChyron = false; //skip chyron, not really meant for that but it works good enough without other chyron messages
+            if (*SkipChyron) *SkipChyron = !!0; //skip chyron, not really meant for that but it works good enough without other chyron messages
 
             *Music_PathfinderControl = *Music_PathfinderControl | 8; //SWAP_PENDING
 
@@ -216,7 +250,7 @@ namespace FreeroamMusic {
 
                 snprintf(buf, sizeof(buf), "MUSIC_PURSUIT_%d", index);
                 //snprintf(buf, sizeof(buf), "NOW PLAYING: %s (Pursuit song idx %d)", getLocalizedString(getBinHash(buf)), index);
-                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)), index);
+                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)));
 
                 break;
                 //case CHASEDOWN:
@@ -234,7 +268,7 @@ namespace FreeroamMusic {
 
                 snprintf(buf, sizeof(buf), "MUSIC_MAP_%d", index);
                 //snprintf(buf, sizeof(buf), "NOW PLAYING: %s (Map Screen song idx %d)", getLocalizedString(getBinHash(buf)), index);
-                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)), index);
+                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)));
 
                 break;
             case CARHEAVEN:
@@ -244,7 +278,7 @@ namespace FreeroamMusic {
 
                 snprintf(buf, sizeof(buf), "MUSIC_CARHEAVEN_%d", index);
                 //snprintf(buf, sizeof(buf), "NOW PLAYING: %s (Car Heaven song idx %d)", getLocalizedString(getBinHash(buf)), index);
-                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)), index);
+                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)));
 
                 break;
             case RACE:
@@ -254,7 +288,7 @@ namespace FreeroamMusic {
 
                 snprintf(buf, sizeof(buf), "MUSIC_RACE_%d", index);
                 //snprintf(buf, sizeof(buf), "NOW PLAYING: %s (Race song idx %d ID %d)", getLocalizedString(getBinHash(buf)), index, *puVar3);
-                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)), index, *puVar3);
+                snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)));
 
                 break;
             }
@@ -263,7 +297,7 @@ namespace FreeroamMusic {
 
             FE__FeChyron__Summon(buf, eChyronType::CHYRON_MUSIC, 0, 0, 0);
 
-            forceNextSongIndex = -1;
+            //forceNextSongIndex = -1;
             //forceNextSongID = -1;
             NeedsInit = false;
             return;
@@ -279,4 +313,19 @@ namespace FreeroamMusic {
         return;
     }
 
+
+	auto __fastcall GetRaceTracks_wrapper_chyron(Attrib::InstanceBase* _this, DWORD edx, DWORD index) {
+
+        char buf[300];
+        snprintf(buf, sizeof(buf), "MUSIC_RACE_%d", index);
+        snprintf(buf, sizeof(buf), "NOW PLAYING: %s", getLocalizedString(getBinHash(buf)));
+        FE__FeChyron__Summon(buf, eChyronType::CHYRON_MUSIC, 0, 0, 0);
+
+		return Attrib::Instance::GetRaceTracks(_this, edx, index);
+	}
+
+
+    void __stdcall TransitionStopChyron(DWORD) {
+		*SkipChyron = false;
+    }
 }
